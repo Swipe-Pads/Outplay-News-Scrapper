@@ -10,6 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import requests
+from bs4 import BeautifulSoup
+from typing import List
 from src.config import Config
 
 
@@ -62,9 +64,54 @@ def fetch_page(url: str, save_to: str = None) -> str:
         raise requests.RequestException(f"Error fetching {url}: {e}")
 
 
+def parse_article_links(html: str, limit: int = None) -> List[str]:
+    """
+    Parse article URLs from Pocket Gamer news listing page.
+
+    Args:
+        html: The HTML content of the news listing page
+        limit: Optional limit on number of URLs to return
+
+    Returns:
+        List[str]: List of article URLs
+    """
+    soup = BeautifulSoup(html, 'lxml')
+    article_urls = []
+
+    # Find all links
+    all_links = soup.find_all('a', href=True)
+
+    for link in all_links:
+        href = link.get('href', '')
+
+        # Skip empty or invalid hrefs
+        if not href or href == '#':
+            continue
+
+        # Make absolute URLs
+        if href.startswith('/'):
+            href = f'https://www.pocketgamer.com{href}'
+        elif not href.startswith('http'):
+            continue
+
+        # Only include article URLs
+        if '/news/' in href:
+            # Exclude: main news page, RSS feeds, page navigation
+            if (href.rstrip('/') != 'https://www.pocketgamer.com/news' and
+                not href.endswith('.rss') and
+                '?page=' not in href and
+                href not in article_urls):
+                article_urls.append(href)
+
+                if limit and len(article_urls) >= limit:
+                    return article_urls
+
+    return article_urls
+
+
 if __name__ == '__main__':
     """
-    Test the scraper by fetching Pocket Gamer news page.
+    Test the scraper by fetching and parsing Pocket Gamer news page.
     """
     import sys
 
@@ -80,11 +127,21 @@ if __name__ == '__main__':
         print(f"✅ Successfully fetched {len(html)} characters")
         print(f"✅ Saved to: data/homepage.html")
         print()
-        print(f"First 500 characters:")
+
+        # Parse article links
+        print("Parsing article links...")
+        article_urls = parse_article_links(html, limit=5)
+
+        print(f"✅ Found {len(article_urls)} article URLs")
+        print()
+        print("First 5 article URLs:")
         print("=" * 60)
-        print(html[:500])
+        for i, url in enumerate(article_urls[:5], 1):
+            print(f"{i}. {url}")
         print("=" * 60)
 
     except Exception as e:
         print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
