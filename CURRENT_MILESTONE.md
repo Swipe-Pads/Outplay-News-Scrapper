@@ -1,68 +1,58 @@
-# Current Milestone: M0.2 - Python Environment
+# Current Milestone: M0.3 - Configuration Setup
 
 **Status**: In Progress
 **Phase**: Phase 0 - Environment & Project Setup
-**Previous**: M0.1 - Project Structure ✅
-**Next**: M0.3 - Configuration Setup
+**Previous**: M0.2 - Python Environment ✅
+**Next**: M0.4 - Hello World Test
 
 ---
 
-## M0.2: Python Environment (15 min)
+## M0.3: Configuration Setup (10 min)
 
-**Goal**: Virtual environment with base dependencies
+**Goal**: Environment variables and config file
 
 **Tasks**:
-1. Create `requirements.txt` with:
+1. Create `.env.example` template with:
    ```
-   requests==2.31.0
-   beautifulsoup4==4.12.2
-   Pillow==10.1.0
-   anthropic==0.18.0
-   python-dotenv==1.0.0
+   ANTHROPIC_API_KEY=your_key_here
+   OPENAI_API_KEY=your_key_here
+   SCRAPER_USER_AGENT=SwipePadsScraper/1.0
    ```
 
-2. Create virtual environment:
-   ```bash
-   python -m venv venv
-   ```
+2. Create `.env` (copy from example) - user will add real keys later
 
-3. Activate and install dependencies:
-   ```bash
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
-   pip install -r requirements.txt
-   ```
+3. Create `src/config.py` with configuration loader
+
+4. Test config loading
 
 **Verification**:
 ```bash
 source venv/bin/activate
-python -c "import requests, bs4, PIL; print('OK')"
-pip list
+python -c "from src.config import Config; print(Config.USER_AGENT)"
 ```
 
 **Expected Output**:
-- "OK" printed to console
-- All packages listed in `pip list`
+- "SwipePadsScraper/1.0" printed to console
 
 **Acceptance Criteria**:
-- [ ] requirements.txt created with all dependencies
-- [ ] Virtual environment created (venv/ directory exists)
-- [ ] All packages installed successfully
-- [ ] Test import succeeds without errors
-- [ ] venv/ is ignored by git
+- [ ] .env.example created with all required variables
+- [ ] .env created (can have placeholder values)
+- [ ] src/config.py created and working
+- [ ] Config loads from .env successfully
+- [ ] .env is git-ignored (already configured)
 
 **On Completion**:
 1. Update `PROGRESS.md`:
-   - Mark M0.2 as complete: `- [x] M0.2: Python Environment`
-   - Update milestone count to 2/89
-2. Update this file to point to M0.3
-3. Git commit: `git add requirements.txt && git commit -m "Phase 0: M0.2 - Python environment configured"`
+   - Mark M0.3 as complete: `- [x] M0.3: Configuration Setup`
+   - Update milestone count to 3/89
+2. Update this file to point to M0.4
+3. Git commit: `git add .env.example src/config.py && git commit -m "Phase 0: M0.3 - Configuration system created"`
 
 ---
 
 ## What Comes Next
 
-After M0.2, proceed to:
-- **M0.3**: Configuration Setup (10 min) - Create .env and config.py
+After M0.3, proceed to:
 - **M0.4**: Hello World Test (10 min) - Test filesystem operations
 
 Then create `docs/phases/STATUS_PHASE_0.md` and proceed to Phase 1.
@@ -75,6 +65,6 @@ Then create `docs/phases/STATUS_PHASE_0.md` and proceed to Phase 1.
 **Overall Progress**: See `PROGRESS.md`
 **Project Requirements**: See `docs/PROJECT_BRIEF.md`
 
-**Previous Milestone Completed**: M0.1 - Project Structure
-- Created directories: src/, data/, images/, exports/, logs/, tests/
-- All data directories properly ignored by git
+**Previous Milestones Completed**:
+- M0.1 - Project Structure: Created all directories ✅
+- M0.2 - Python Environment: venv created, all packages installed ✅
