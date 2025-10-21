@@ -2,14 +2,14 @@
 
 **Last Updated**: 2025-10-21
 **Current Phase**: Phase 0 - Environment & Project Setup
-**Current Milestone**: M0.3 - Configuration Setup
-**Completed**: 2/89 milestones (2.2%)
+**Current Milestone**: M0.4 - Hello World Test
+**Completed**: 3/89 milestones (3.4%)
 
 ---
 
 ## Phase Status
 
-- [ ] **Phase 0**: Environment & Project Setup (2/4 milestones - 50%)
+- [ ] **Phase 0**: Environment & Project Setup (3/4 milestones - 75%)
 - [ ] **Phase 1**: Single Article Scraper (0/7 milestones)
 - [ ] **Phase 2**: Image Download Pipeline (0/7 milestones)
 - [ ] **Phase 3**: SQLite Storage (0/7 milestones)
@@ -27,10 +27,10 @@
 
 - [x] M0.1: Project Structure (15 min) ✅
 - [x] M0.2: Python Environment (15 min) ✅
-- [ ] M0.3: Configuration Setup (10 min)
+- [x] M0.3: Configuration Setup (10 min) ✅
 - [ ] M0.4: Hello World Test (10 min)
 
-**Status**: In progress (2/4 complete)
+**Status**: In progress (3/4 complete)
 
 ---
 
@@ -179,6 +179,7 @@
 ### 2025-10-21
 - **M0.1**: Project Structure - Created src/, data/, images/, exports/, logs/, tests/ directories ✅
 - **M0.2**: Python Environment - Created venv, installed all dependencies (requests, beautifulsoup4, Pillow, anthropic, etc.) ✅
+- **M0.3**: Configuration Setup - Created .env.example, .env, and src/config.py with validation ✅
 
 ---
 
