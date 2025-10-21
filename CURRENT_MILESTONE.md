@@ -1,105 +1,69 @@
-# Current Milestone: Ready to Start Phase 0
+# Current Milestone: M0.2 - Python Environment
 
-**Status**: Not Started
+**Status**: In Progress
 **Phase**: Phase 0 - Environment & Project Setup
-**Next Milestone**: M0.1 - Project Structure
+**Previous**: M0.1 - Project Structure ✅
+**Next**: M0.3 - Configuration Setup
 
 ---
 
-## Next Steps
+## M0.2: Python Environment (15 min)
 
-You are ready to begin implementation. Start with **M0.1: Project Structure**.
-
-### M0.1: Project Structure (15 min)
-
-**Goal**: Create directory structure and verify it exists
+**Goal**: Virtual environment with base dependencies
 
 **Tasks**:
-1. Create subdirectories:
-   - `src/` - Source code
-   - `data/` - Database and temp files
-   - `images/` - Downloaded article images
-   - `exports/` - Export files for CMS
-   - `logs/` - Log files
-   - `tests/` - Test scripts
-
-2. Create `.gitignore` with:
+1. Create `requirements.txt` with:
    ```
-   # Virtual environment
-   venv/
+   requests==2.31.0
+   beautifulsoup4==4.12.2
+   Pillow==10.1.0
+   anthropic==0.18.0
+   python-dotenv==1.0.0
+   ```
 
-   # Data directories (exclude from git)
-   data/
-   images/
-   exports/
-   logs/
+2. Create virtual environment:
+   ```bash
+   python -m venv venv
+   ```
 
-   # Environment variables
-   .env
-
-   # Python
-   __pycache__/
-   *.pyc
-   *.pyo
-   *.db
-
-   # OS
-   .DS_Store
-   Thumbs.db
-
-   # IDE
-   .vscode/
-   .idea/
-   *.swp
+3. Activate and install dependencies:
+   ```bash
+   source venv/bin/activate  # or venv\Scripts\activate on Windows
+   pip install -r requirements.txt
    ```
 
 **Verification**:
 ```bash
-ls -la
-tree -L 2  # or: find . -type d -maxdepth 2
-git status
+source venv/bin/activate
+python -c "import requests, bs4, PIL; print('OK')"
+pip list
 ```
 
-**Expected Result**:
-```
-.
-├── docs/
-│   ├── PROJECT_BRIEF.md
-│   ├── DEVELOPMENT_PLAN.md
-│   └── phases/
-├── src/
-├── data/
-├── images/
-├── exports/
-├── logs/
-├── tests/
-├── .git/
-├── .gitignore
-├── PROGRESS.md
-└── CURRENT_MILESTONE.md
-```
+**Expected Output**:
+- "OK" printed to console
+- All packages listed in `pip list`
 
 **Acceptance Criteria**:
-- [ ] All directories created
-- [ ] .gitignore exists and configured
-- [ ] `git status` shows .gitignore as untracked (or add it)
-- [ ] data/, images/, exports/, logs/ are ignored by git
+- [ ] requirements.txt created with all dependencies
+- [ ] Virtual environment created (venv/ directory exists)
+- [ ] All packages installed successfully
+- [ ] Test import succeeds without errors
+- [ ] venv/ is ignored by git
 
 **On Completion**:
 1. Update `PROGRESS.md`:
-   - Mark M0.1 as complete: `- [x] M0.1: Project Structure`
-   - Update milestone count
-2. Update this file to point to M0.2
-3. Git commit: `git add . && git commit -m "Phase 0: M0.1 - Project structure created"`
+   - Mark M0.2 as complete: `- [x] M0.2: Python Environment`
+   - Update milestone count to 2/89
+2. Update this file to point to M0.3
+3. Git commit: `git add requirements.txt && git commit -m "Phase 0: M0.2 - Python environment configured"`
 
 ---
 
 ## What Comes Next
 
-After M0.1, proceed to:
-- **M0.2**: Python Environment (15 min)
-- **M0.3**: Configuration Setup (10 min)
-- **M0.4**: Hello World Test (10 min)
+After M0.2, proceed to:
+- **M0.3**: Configuration Setup (10 min) - Create .env and config.py
+- **M0.4**: Hello World Test (10 min) - Test filesystem operations
 
 Then create `docs/phases/STATUS_PHASE_0.md` and proceed to Phase 1.
 
@@ -111,7 +75,6 @@ Then create `docs/phases/STATUS_PHASE_0.md` and proceed to Phase 1.
 **Overall Progress**: See `PROGRESS.md`
 **Project Requirements**: See `docs/PROJECT_BRIEF.md`
 
-**Need Help?**
-- Stuck? Check the verification commands above
-- Something broken? Check git history: `git log --oneline`
-- Want to restart? Each milestone is independent and reversible
+**Previous Milestone Completed**: M0.1 - Project Structure
+- Created directories: src/, data/, images/, exports/, logs/, tests/
+- All data directories properly ignored by git

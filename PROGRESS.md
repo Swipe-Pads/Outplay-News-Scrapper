@@ -1,15 +1,15 @@
 # SwipePads News Scraper - Progress Tracker
 
-**Last Updated**: 2025-10-21 (Initial Setup)
+**Last Updated**: 2025-10-21
 **Current Phase**: Phase 0 - Environment & Project Setup
-**Current Milestone**: Ready to start M0.1
-**Completed**: 0/89 milestones (0%)
+**Current Milestone**: M0.2 - Python Environment
+**Completed**: 1/89 milestones (1.1%)
 
 ---
 
 ## Phase Status
 
-- [ ] **Phase 0**: Environment & Project Setup (0/4 milestones)
+- [ ] **Phase 0**: Environment & Project Setup (1/4 milestones - 25%)
 - [ ] **Phase 1**: Single Article Scraper (0/7 milestones)
 - [ ] **Phase 2**: Image Download Pipeline (0/7 milestones)
 - [ ] **Phase 3**: SQLite Storage (0/7 milestones)
@@ -25,12 +25,12 @@
 
 ## Phase 0: Environment & Project Setup
 
-- [ ] M0.1: Project Structure (15 min)
+- [x] M0.1: Project Structure (15 min) ✅
 - [ ] M0.2: Python Environment (15 min)
 - [ ] M0.3: Configuration Setup (10 min)
 - [ ] M0.4: Hello World Test (10 min)
 
-**Status**: Not started
+**Status**: In progress (1/4 complete)
 
 ---
 
@@ -176,7 +176,8 @@
 
 ## Completed Milestones
 
-None yet.
+### 2025-10-21
+- **M0.1**: Project Structure - Created src/, data/, images/, exports/, logs/, tests/ directories ✅
 
 ---
 
