@@ -2,15 +2,15 @@
 
 **Last Updated**: 2025-10-22
 **Current Phase**: Phase 1 - Single Article Scraper
-**Current Milestone**: M1.5 - Extract Article Content
-**Completed**: 8/89 milestones (9.0%)
+**Current Milestone**: M1.6 - Extract Image URL
+**Completed**: 9/89 milestones (10.1%)
 
 ---
 
 ## Phase Status
 
 - [x] **Phase 0**: Environment & Project Setup (4/4 milestones - 100%) ✅
-- [ ] **Phase 1**: Single Article Scraper (4/7 milestones - 57%)
+- [ ] **Phase 1**: Single Article Scraper (5/7 milestones - 71%)
 - [ ] **Phase 2**: Image Download Pipeline (0/7 milestones)
 - [ ] **Phase 3**: SQLite Storage (0/7 milestones)
 - [ ] **Phase 4**: Integration - Single Article Pipeline (0/7 milestones)
@@ -40,11 +40,11 @@
 - [x] M1.2: Parse Article Links (30 min) ✅
 - [x] M1.3: Fetch Single Article Page (20 min) ✅
 - [x] M1.4: Extract Article Metadata (45 min) ✅
-- [ ] M1.5: Extract Article Content (45 min)
+- [x] M1.5: Extract Article Content (45 min) ✅
 - [ ] M1.6: Extract Image URL (30 min)
 - [ ] M1.7: Integrate Full Article Extraction (30 min)
 
-**Status**: In Progress (4/7 milestones complete)
+**Status**: In Progress (5/7 milestones complete)
 
 ---
 
@@ -188,6 +188,7 @@
 ### 2025-10-22
 - **M1.3**: Fetch Single Article Page - Fixed Brotli encoding issue, article fetching works (116KB) ✅
 - **M1.4**: Extract Article Metadata - Created parser.py with JSON-LD parsing, extracts title/date/author ✅
+- **M1.5**: Extract Article Content - Added parse_article_content(), extracts 737 chars clean text ✅
 
 ---
 

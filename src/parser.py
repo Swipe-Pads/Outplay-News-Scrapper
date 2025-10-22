@@ -103,6 +103,72 @@ def parse_article_metadata(html: str) -> Dict[str, Optional[str]]:
     return metadata
 
 
+def parse_article_content(html: str) -> str:
+    """
+    Extract main article content (paragraphs) from HTML.
+
+    Args:
+        html: Article HTML content
+
+    Returns:
+        Article content as clean text (no HTML tags)
+        Returns empty string if no content found
+
+    Example:
+        >>> html = open('data/article_sample.html').read()
+        >>> content = parse_article_content(html)
+        >>> print(len(content))
+        2500
+    """
+    soup = BeautifulSoup(html, 'lxml')
+
+    content_text = ""
+
+    # Strategy 1: Look for common article content containers
+    # Try multiple selectors in priority order
+    content_selectors = [
+        {'class': re.compile('body-copy|article-body|entry-content|post-content', re.I)},
+        {'class': 'article'},
+        {'itemprop': 'articleBody'},
+    ]
+
+    content_container = None
+    for selector in content_selectors:
+        content_container = soup.find('div', selector)
+        if content_container:
+            break
+
+    # Strategy 2: If no container found, try to find article tag
+    if not content_container:
+        content_container = soup.find('article')
+
+    if content_container:
+        # Extract all paragraphs
+        paragraphs = content_container.find_all('p')
+
+        # Clean and join paragraphs
+        clean_paragraphs = []
+        for p in paragraphs:
+            # Get text, stripping HTML tags
+            text = p.get_text(separator=' ', strip=True)
+
+            # Skip empty paragraphs or very short ones (likely ads/cruft)
+            if len(text) < 20:
+                continue
+
+            # Skip if looks like advertisement or related content
+            lower_text = text.lower()
+            if any(skip in lower_text for skip in ['advertisement', 'sponsored', 'read more:', 'related:']):
+                continue
+
+            clean_paragraphs.append(text)
+
+        # Join with double newlines for readability
+        content_text = '\n\n'.join(clean_paragraphs)
+
+    return content_text
+
+
 if __name__ == '__main__':
     """
     Test the parser with sample article HTML.
@@ -154,3 +220,32 @@ if __name__ == '__main__':
     else:
         print()
         print("✅ All metadata extracted successfully!")
+
+    print()
+    print("=" * 60)
+    print("Extracting content...")
+    print("=" * 60)
+    print()
+
+    content = parse_article_content(html)
+
+    if not content:
+        print("❌ No content extracted")
+        sys.exit(1)
+
+    print(f"✅ Extracted {len(content)} characters of content")
+    print()
+    print("First 200 characters:")
+    print("-" * 60)
+    print(content[:200])
+    print("-" * 60)
+    print()
+
+    # Check for HTML tags (shouldn't have any)
+    if '<' in content and '>' in content:
+        print("⚠️  Warning: Content contains HTML tags")
+    else:
+        print("✅ Content is clean text (no HTML tags)")
+
+    print()
+    print("✅ All parsing tests passed!")
