@@ -1,16 +1,16 @@
 # SwipePads News Scraper - Progress Tracker
 
-**Last Updated**: 2025-10-21
+**Last Updated**: 2025-10-22
 **Current Phase**: Phase 1 - Single Article Scraper
-**Current Milestone**: M1.1 - Fetch Homepage HTML
-**Completed**: 4/89 milestones (4.5%)
+**Current Milestone**: M1.4 - Extract Article Metadata
+**Completed**: 7/89 milestones (7.9%)
 
 ---
 
 ## Phase Status
 
 - [x] **Phase 0**: Environment & Project Setup (4/4 milestones - 100%) ✅
-- [ ] **Phase 1**: Single Article Scraper (0/7 milestones)
+- [ ] **Phase 1**: Single Article Scraper (3/7 milestones - 43%)
 - [ ] **Phase 2**: Image Download Pipeline (0/7 milestones)
 - [ ] **Phase 3**: SQLite Storage (0/7 milestones)
 - [ ] **Phase 4**: Integration - Single Article Pipeline (0/7 milestones)
@@ -36,15 +36,15 @@
 
 ## Phase 1: Single Article Scraper
 
-- [ ] M1.1: Fetch Homepage HTML (20 min)
-- [ ] M1.2: Parse Article Links (30 min)
-- [ ] M1.3: Fetch Single Article Page (20 min)
+- [x] M1.1: Fetch Homepage HTML (20 min) ✅
+- [x] M1.2: Parse Article Links (30 min) ✅
+- [x] M1.3: Fetch Single Article Page (20 min) ✅
 - [ ] M1.4: Extract Article Metadata (45 min)
 - [ ] M1.5: Extract Article Content (45 min)
 - [ ] M1.6: Extract Image URL (30 min)
 - [ ] M1.7: Integrate Full Article Extraction (30 min)
 
-**Status**: Not started
+**Status**: In Progress (3/7 milestones complete)
 
 ---
 
@@ -182,6 +182,11 @@
 - **M0.3**: Configuration Setup - Created .env.example, .env, and src/config.py with validation ✅
 - **M0.4**: Hello World Test - Filesystem operations verified (create/read/delete) ✅
 - **🎉 Phase 0 Complete**: Environment & Project Setup fully configured ✅
+- **M1.1**: Fetch Homepage HTML - fetch_page() function created, homepage fetched (121KB) ✅
+- **M1.2**: Parse Article Links - parse_article_links() function created, found article URLs ✅
+
+### 2025-10-22
+- **M1.3**: Fetch Single Article Page - Fixed Brotli encoding issue, article fetching works (116KB) ✅
 
 ---
 

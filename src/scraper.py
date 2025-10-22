@@ -33,7 +33,6 @@ def fetch_page(url: str, save_to: str = None) -> str:
         'User-Agent': Config.USER_AGENT,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
         'Connection': 'keep-alive',
     }
 
@@ -139,6 +138,16 @@ if __name__ == '__main__':
         for i, url in enumerate(article_urls[:5], 1):
             print(f"{i}. {url}")
         print("=" * 60)
+        print()
+
+        # Fetch a single article to verify
+        if article_urls:
+            print(f"Fetching sample article...")
+            article_url = article_urls[0]
+            print(f"URL: {article_url}")
+            article_html = fetch_page(article_url, save_to='data/article_sample.html')
+            print(f"✅ Fetched {len(article_html)} characters")
+            print(f"✅ Saved to: data/article_sample.html")
 
     except Exception as e:
         print(f"❌ Error: {e}")

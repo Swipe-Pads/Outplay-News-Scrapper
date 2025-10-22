@@ -1,80 +1,68 @@
-# Current Milestone: M0.4 - Hello World Test
+# Current Milestone: M1.4 - Extract Article Metadata
 
-**Status**: In Progress
-**Phase**: Phase 0 - Environment & Project Setup (Final milestone!)
-**Previous**: M0.3 - Configuration Setup ✅
-**Next**: Phase 1 - Single Article Scraper
+**Status**: Ready to Start
+**Phase**: Phase 1 - Single Article Scraper
+**Previous**: M1.3 - Fetch Single Article Page ✅
+**Next**: M1.5 - Extract Article Content
 
 ---
 
-## M0.4: Hello World Test (10 min)
+## M1.4: Extract Article Metadata (45 min)
 
-**Goal**: Prove we can create files and they persist
+**Goal**: Parse title, date, author from article page
 
 **Tasks**:
-1. Create `src/test_filesystem.py` that:
-   - Creates `data/test.txt` with current timestamp
-   - Reads it back and verifies content
-   - Deletes test file
-   - Prints success message
-
-2. Run the test script
-
-3. Verify no test files remain
+1. Implement `parse_article_metadata(html)` in `src/parser.py`
+2. Manually inspect `data/article_sample.html` to find selectors
+3. Extract: title (h1), date (meta tag or time element), author
+4. Return as dictionary
+5. Handle missing fields gracefully (some articles may lack author)
 
 **Verification**:
 ```bash
 source venv/bin/activate
-python src/test_filesystem.py
-ls -lh data/
-# Should NOT show test.txt (cleaned up)
+python -c "from src.parser import parse_article_metadata; meta = parse_article_metadata(open('data/article_sample.html').read()); import json; print(json.dumps(meta, indent=2))"
 ```
 
 **Expected Output**:
-```
-✅ Created file: data/test.txt
-✅ File contents verified
-✅ File deleted successfully
-✅ Filesystem test: PASSED
+```json
+{
+  "title": "Nominations are now open for the 12th Pocket Gamer Awards",
+  "date": "2025-10-15T10:30:00",
+  "author": "John Smith"
+}
 ```
 
 **Acceptance Criteria**:
-- [ ] src/test_filesystem.py created
-- [ ] Script creates file in data/ directory
-- [ ] Script reads and verifies content
-- [ ] Script cleans up (deletes test file)
-- [ ] No test artifacts remain
-- [ ] All operations succeed
+- [ ] Title extracted correctly
+- [ ] Date in ISO format
+- [ ] Author extracted (or null if missing)
+- [ ] Function handles missing fields gracefully
 
 **On Completion**:
 1. Update `PROGRESS.md`:
-   - Mark M0.4 as complete: `- [x] M0.4: Hello World Test`
-   - Update milestone count to 4/89
-   - Mark Phase 0 as complete: `- [x] Phase 0: ...`
-2. Create `docs/phases/STATUS_PHASE_0.md` documenting Phase 0
-3. Update this file to point to M1.1 (Phase 1 begins!)
-4. Git commit: `git add src/test_filesystem.py && git commit -m "Phase 0: M0.4 - Filesystem test passed"`
-5. Git tag: `git tag phase-0-complete`
+   - Mark M1.4 as complete: `- [x] M1.4: Extract Article Metadata`
+   - Update milestone count to 7/89
+2. Update this file to point to M1.5
+3. Git commit: `git add src/parser.py && git commit -m "Phase 1: M1.4 - Article metadata extraction"`
 
 ---
 
 ## What Comes Next
 
-After M0.4, Phase 0 is complete! Proceed to:
-- **Create STATUS_PHASE_0.md** - Document what was accomplished
-- **Phase 1: M1.1** - Fetch Homepage HTML (20 min)
-
-Phase 1 begins web scraping from Pocket Gamer.
+After M1.4, proceed to:
+- **M1.5** - Extract Article Content (45 min)
 
 ---
 
 ## Quick Reference
 
-**Current Phase Documentation**: See `docs/DEVELOPMENT_PLAN.md` - Phase 0
+**Current Phase Documentation**: See `docs/DEVELOPMENT_PLAN.md` - Phase 1
 **Overall Progress**: See `PROGRESS.md`
 **Project Requirements**: See `docs/PROJECT_BRIEF.md`
 
 **Previous Milestones Completed**:
-- M0.1 - Project Structure: Created all directories ✅
-- M0.2 - Python Environment: venv created, all packages installed ✅
-- M0.3 - Configuration Setup: .env and config.py created ✅
+- Phase 0 - All milestones complete ✅
+- M1.1 - Fetch Homepage HTML ✅
+- M1.2 - Parse Article Links ✅
+- M1.3 - Fetch Single Article Page ✅
