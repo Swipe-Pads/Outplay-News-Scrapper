@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 import re
+from datetime import datetime
 from typing import Dict, Optional
 from bs4 import BeautifulSoup
 
@@ -261,6 +262,51 @@ def parse_article_image(html: str) -> Optional[str]:
     return image_url
 
 
+def extract_full_article(html: str, url: str) -> Dict[str, Optional[str]]:
+    """
+    Extract complete article data from HTML.
+
+    Combines metadata, content, and image extraction into a single function.
+
+    Args:
+        html: Article HTML content
+        url: Source URL of the article (for tracking/deduplication)
+
+    Returns:
+        Dictionary with all article fields:
+        - url: Source URL
+        - title: Article title
+        - date: Publication date (ISO format)
+        - author: Article author (or None)
+        - content: Full article text
+        - image_url: Main article image URL (or None)
+        - scraped_at: Timestamp when article was scraped (ISO format)
+
+    Example:
+        >>> html = open('data/article_sample.html').read()
+        >>> article = extract_full_article(html, 'https://example.com/article')
+        >>> print(article['title'])
+        'Nominations are now open for the 12th Pocket Gamer Awards'
+    """
+    # Extract all components
+    metadata = parse_article_metadata(html)
+    content = parse_article_content(html)
+    image_url = parse_article_image(html)
+
+    # Build complete article dictionary
+    article = {
+        'url': url,
+        'title': metadata.get('title'),
+        'date': metadata.get('date'),
+        'author': metadata.get('author'),
+        'content': content if content else None,
+        'image_url': image_url,
+        'scraped_at': datetime.utcnow().isoformat() + 'Z'
+    }
+
+    return article
+
+
 if __name__ == '__main__':
     """
     Test the parser with sample article HTML.
@@ -359,6 +405,35 @@ if __name__ == '__main__':
         print("⚠️  Warning: Image URL is not absolute")
     else:
         print("✅ Image URL is absolute")
+
+    print()
+    print("=" * 60)
+    print("Testing full article extraction...")
+    print("=" * 60)
+    print()
+
+    # Test the integrated extraction function
+    test_url = 'https://www.pocketgamer.com/news/12th-pocket-gamer-awards-nominations-open/'
+    full_article = extract_full_article(html, test_url)
+
+    print("Complete article dictionary:")
+    print("=" * 60)
+    print(json.dumps(full_article, indent=2, ensure_ascii=False))
+    print("=" * 60)
+    print()
+
+    # Validate
+    required_fields = ['url', 'title', 'scraped_at']
+    for field in required_fields:
+        if not full_article.get(field):
+            print(f"❌ Missing required field: {field}")
+            sys.exit(1)
+
+    print(f"✅ URL: {full_article['url']}")
+    print(f"✅ Title: {full_article['title']}")
+    print(f"✅ Scraped at: {full_article['scraped_at']}")
+    print(f"✅ Content length: {len(full_article['content'])} chars" if full_article['content'] else "⚠️  No content")
+    print(f"✅ Image URL present" if full_article['image_url'] else "⚠️  No image URL")
 
     print()
     print("✅ All parsing tests passed!")
