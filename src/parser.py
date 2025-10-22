@@ -169,6 +169,98 @@ def parse_article_content(html: str) -> str:
     return content_text
 
 
+def parse_article_image(html: str) -> Optional[str]:
+    """
+    Extract main article image URL from HTML.
+
+    Args:
+        html: Article HTML content
+
+    Returns:
+        Image URL as string, or None if not found
+
+    Example:
+        >>> html = open('data/article_sample.html').read()
+        >>> img_url = parse_article_image(html)
+        >>> print(img_url)
+        'https://media.pocketgamer.com/artwork/...'
+    """
+    soup = BeautifulSoup(html, 'lxml')
+
+    image_url = None
+
+    # Strategy 1: Try JSON-LD structured data (most reliable)
+    json_ld_scripts = soup.find_all('script', type='application/ld+json')
+    for script in json_ld_scripts:
+        try:
+            data = json.loads(script.string)
+
+            # JSON-LD can be an array of objects
+            if isinstance(data, list):
+                for item in data:
+                    if item.get('@type') == 'NewsArticle':
+                        data = item
+                        break
+
+            # Extract from NewsArticle structured data
+            if isinstance(data, dict) and data.get('@type') == 'NewsArticle':
+                if 'image' in data:
+                    image_data = data['image']
+                    if isinstance(image_data, dict) and 'url' in image_data:
+                        image_url = image_data['url']
+                    elif isinstance(image_data, str):
+                        image_url = image_data
+
+                    if image_url:
+                        break
+
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+
+    # Strategy 2: Try Open Graph meta tag
+    if not image_url:
+        og_image = soup.find('meta', property='og:image')
+        if og_image and og_image.get('content'):
+            image_url = og_image['content']
+
+    # Strategy 3: Try Twitter meta tag
+    if not image_url:
+        twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
+        if twitter_image and twitter_image.get('content'):
+            image_url = twitter_image['content']
+
+    # Strategy 4: Try to find main article image (figure.lead img, article img, etc.)
+    if not image_url:
+        # Look for common patterns
+        img_selectors = [
+            soup.find('figure', class_=re.compile('lead|hero|featured', re.I)),
+            soup.find('div', class_=re.compile('article.*image|featured.*image', re.I)),
+            soup.find('article')
+        ]
+
+        for container in img_selectors:
+            if container:
+                img_tag = container.find('img')
+                if img_tag:
+                    # Try src, then data-src (lazy loading)
+                    image_url = img_tag.get('src') or img_tag.get('data-src')
+                    if image_url:
+                        break
+
+    # Validate and normalize URL
+    if image_url:
+        # Make relative URLs absolute
+        if image_url.startswith('/'):
+            # Extract base URL from article (need to get it from somewhere)
+            # For now, return as-is - caller should handle this
+            pass
+        elif not image_url.startswith('http'):
+            # Invalid URL
+            return None
+
+    return image_url
+
+
 if __name__ == '__main__':
     """
     Test the parser with sample article HTML.
@@ -246,6 +338,27 @@ if __name__ == '__main__':
         print("⚠️  Warning: Content contains HTML tags")
     else:
         print("✅ Content is clean text (no HTML tags)")
+
+    print()
+    print("=" * 60)
+    print("Extracting image URL...")
+    print("=" * 60)
+    print()
+
+    image_url = parse_article_image(html)
+
+    if not image_url:
+        print("❌ No image URL found")
+        sys.exit(1)
+
+    print(f"✅ Image URL: {image_url}")
+    print()
+
+    # Validate URL format
+    if not image_url.startswith('http'):
+        print("⚠️  Warning: Image URL is not absolute")
+    else:
+        print("✅ Image URL is absolute")
 
     print()
     print("✅ All parsing tests passed!")
