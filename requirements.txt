@@ -9,7 +9,7 @@ lxml==5.1.0
 Pillow==10.1.0
 
 # AI summarization
-anthropic==0.18.0
+anthropic==0.72.0
 
 # Configuration
 python-dotenv==1.0.0

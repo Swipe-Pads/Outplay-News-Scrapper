@@ -99,17 +99,10 @@ def get_client() -> Anthropic:
     Raises:
         APIKeyError: If API key is not configured
     """
-    # Validate configuration
-    is_valid, error_msg = Config.validate()
+    # Validate Anthropic configuration specifically
+    is_valid, error_msg = Config.validate(provider='anthropic')
     if not is_valid:
         raise APIKeyError(error_msg)
-
-    provider = Config.get_ai_provider()
-    if provider != 'anthropic':
-        raise APIKeyError(
-            f"Anthropic API key not configured. Current provider: {provider}. "
-            "Please set ANTHROPIC_API_KEY in .env file."
-        )
 
     try:
         client = Anthropic(api_key=Config.ANTHROPIC_API_KEY)
