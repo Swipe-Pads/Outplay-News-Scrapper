@@ -47,23 +47,41 @@ class Config:
     LOG_FILE_FULL_PATH = PROJECT_ROOT / LOG_FILE
 
     @classmethod
-    def validate(cls):
+    def validate(cls, provider=None):
         """
         Validate that required configuration is present.
+
+        Args:
+            provider: Specific provider to validate ('anthropic', 'openai', or None for any)
+
         Returns tuple: (is_valid, error_message)
         """
-        # Check that at least one API key is configured
-        if not cls.ANTHROPIC_API_KEY and not cls.OPENAI_API_KEY:
-            return False, "No AI API key configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env"
+        # If no provider specified, check that at least one is valid
+        if provider is None:
+            has_anthropic = cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower()
+            has_openai = cls.OPENAI_API_KEY and 'your_' not in cls.OPENAI_API_KEY.lower()
 
-        # Validate that keys don't have placeholder values
-        if cls.ANTHROPIC_API_KEY and 'your_' in cls.ANTHROPIC_API_KEY.lower():
-            return False, "ANTHROPIC_API_KEY contains placeholder value. Please update .env with real key."
+            if not has_anthropic and not has_openai:
+                return False, "No valid AI API key configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env"
 
-        if cls.OPENAI_API_KEY and 'your_' in cls.OPENAI_API_KEY.lower():
-            return False, "OPENAI_API_KEY contains placeholder value. Please update .env with real key."
+            return True, "Configuration valid"
 
-        return True, "Configuration valid"
+        # Validate specific provider
+        if provider == 'anthropic':
+            if not cls.ANTHROPIC_API_KEY:
+                return False, "ANTHROPIC_API_KEY not set in .env"
+            if 'your_' in cls.ANTHROPIC_API_KEY.lower():
+                return False, "ANTHROPIC_API_KEY contains placeholder value. Please update .env with real key."
+            return True, "Anthropic API key valid"
+
+        if provider == 'openai':
+            if not cls.OPENAI_API_KEY:
+                return False, "OPENAI_API_KEY not set in .env"
+            if 'your_' in cls.OPENAI_API_KEY.lower():
+                return False, "OPENAI_API_KEY contains placeholder value. Please update .env with real key."
+            return True, "OpenAI API key valid"
+
+        return False, f"Unknown provider: {provider}"
 
     @classmethod
     def get_ai_provider(cls):

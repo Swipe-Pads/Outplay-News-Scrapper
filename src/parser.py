@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 import re
+from datetime import datetime
 from typing import Dict, Optional
 from bs4 import BeautifulSoup
 
@@ -169,6 +170,143 @@ def parse_article_content(html: str) -> str:
     return content_text
 
 
+def parse_article_image(html: str) -> Optional[str]:
+    """
+    Extract main article image URL from HTML.
+
+    Args:
+        html: Article HTML content
+
+    Returns:
+        Image URL as string, or None if not found
+
+    Example:
+        >>> html = open('data/article_sample.html').read()
+        >>> img_url = parse_article_image(html)
+        >>> print(img_url)
+        'https://media.pocketgamer.com/artwork/...'
+    """
+    soup = BeautifulSoup(html, 'lxml')
+
+    image_url = None
+
+    # Strategy 1: Try JSON-LD structured data (most reliable)
+    json_ld_scripts = soup.find_all('script', type='application/ld+json')
+    for script in json_ld_scripts:
+        try:
+            data = json.loads(script.string)
+
+            # JSON-LD can be an array of objects
+            if isinstance(data, list):
+                for item in data:
+                    if item.get('@type') == 'NewsArticle':
+                        data = item
+                        break
+
+            # Extract from NewsArticle structured data
+            if isinstance(data, dict) and data.get('@type') == 'NewsArticle':
+                if 'image' in data:
+                    image_data = data['image']
+                    if isinstance(image_data, dict) and 'url' in image_data:
+                        image_url = image_data['url']
+                    elif isinstance(image_data, str):
+                        image_url = image_data
+
+                    if image_url:
+                        break
+
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+
+    # Strategy 2: Try Open Graph meta tag
+    if not image_url:
+        og_image = soup.find('meta', property='og:image')
+        if og_image and og_image.get('content'):
+            image_url = og_image['content']
+
+    # Strategy 3: Try Twitter meta tag
+    if not image_url:
+        twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
+        if twitter_image and twitter_image.get('content'):
+            image_url = twitter_image['content']
+
+    # Strategy 4: Try to find main article image (figure.lead img, article img, etc.)
+    if not image_url:
+        # Look for common patterns
+        img_selectors = [
+            soup.find('figure', class_=re.compile('lead|hero|featured', re.I)),
+            soup.find('div', class_=re.compile('article.*image|featured.*image', re.I)),
+            soup.find('article')
+        ]
+
+        for container in img_selectors:
+            if container:
+                img_tag = container.find('img')
+                if img_tag:
+                    # Try src, then data-src (lazy loading)
+                    image_url = img_tag.get('src') or img_tag.get('data-src')
+                    if image_url:
+                        break
+
+    # Validate and normalize URL
+    if image_url:
+        # Make relative URLs absolute
+        if image_url.startswith('/'):
+            # Extract base URL from article (need to get it from somewhere)
+            # For now, return as-is - caller should handle this
+            pass
+        elif not image_url.startswith('http'):
+            # Invalid URL
+            return None
+
+    return image_url
+
+
+def extract_full_article(html: str, url: str) -> Dict[str, Optional[str]]:
+    """
+    Extract complete article data from HTML.
+
+    Combines metadata, content, and image extraction into a single function.
+
+    Args:
+        html: Article HTML content
+        url: Source URL of the article (for tracking/deduplication)
+
+    Returns:
+        Dictionary with all article fields:
+        - url: Source URL
+        - title: Article title
+        - date: Publication date (ISO format)
+        - author: Article author (or None)
+        - content: Full article text
+        - image_url: Main article image URL (or None)
+        - scraped_at: Timestamp when article was scraped (ISO format)
+
+    Example:
+        >>> html = open('data/article_sample.html').read()
+        >>> article = extract_full_article(html, 'https://example.com/article')
+        >>> print(article['title'])
+        'Nominations are now open for the 12th Pocket Gamer Awards'
+    """
+    # Extract all components
+    metadata = parse_article_metadata(html)
+    content = parse_article_content(html)
+    image_url = parse_article_image(html)
+
+    # Build complete article dictionary
+    article = {
+        'url': url,
+        'title': metadata.get('title'),
+        'date': metadata.get('date'),
+        'author': metadata.get('author'),
+        'content': content if content else None,
+        'image_url': image_url,
+        'scraped_at': datetime.utcnow().isoformat() + 'Z'
+    }
+
+    return article
+
+
 if __name__ == '__main__':
     """
     Test the parser with sample article HTML.
@@ -246,6 +384,56 @@ if __name__ == '__main__':
         print("⚠️  Warning: Content contains HTML tags")
     else:
         print("✅ Content is clean text (no HTML tags)")
+
+    print()
+    print("=" * 60)
+    print("Extracting image URL...")
+    print("=" * 60)
+    print()
+
+    image_url = parse_article_image(html)
+
+    if not image_url:
+        print("❌ No image URL found")
+        sys.exit(1)
+
+    print(f"✅ Image URL: {image_url}")
+    print()
+
+    # Validate URL format
+    if not image_url.startswith('http'):
+        print("⚠️  Warning: Image URL is not absolute")
+    else:
+        print("✅ Image URL is absolute")
+
+    print()
+    print("=" * 60)
+    print("Testing full article extraction...")
+    print("=" * 60)
+    print()
+
+    # Test the integrated extraction function
+    test_url = 'https://www.pocketgamer.com/news/12th-pocket-gamer-awards-nominations-open/'
+    full_article = extract_full_article(html, test_url)
+
+    print("Complete article dictionary:")
+    print("=" * 60)
+    print(json.dumps(full_article, indent=2, ensure_ascii=False))
+    print("=" * 60)
+    print()
+
+    # Validate
+    required_fields = ['url', 'title', 'scraped_at']
+    for field in required_fields:
+        if not full_article.get(field):
+            print(f"❌ Missing required field: {field}")
+            sys.exit(1)
+
+    print(f"✅ URL: {full_article['url']}")
+    print(f"✅ Title: {full_article['title']}")
+    print(f"✅ Scraped at: {full_article['scraped_at']}")
+    print(f"✅ Content length: {len(full_article['content'])} chars" if full_article['content'] else "⚠️  No content")
+    print(f"✅ Image URL present" if full_article['image_url'] else "⚠️  No image URL")
 
     print()
     print("✅ All parsing tests passed!")

@@ -1,62 +1,97 @@
-# Current Milestone: M1.6 - Extract Image URL
+# Current Milestone: M6.2 - Summarization Prompt Engineering
 
 **Status**: Ready to Start
-**Phase**: Phase 1 - Single Article Scraper
-**Previous**: M1.5 - Extract Article Content ✅
-**Next**: M1.7 - Integrate Full Article Extraction
+**Phase**: Phase 6 - Summarization with AI
+**Previous**: M6.1 - AI Client Setup ✅
+**Next**: M6.3 - Summarize Single Article
 
 ---
 
-## M1.6: Extract Image URL (30 min)
+## M6.2: Summarization Prompt Engineering (30 min)
 
-**Goal**: Find main cover image URL
+**Goal**: Test and refine the summarization prompt to generate high-quality summaries
 
 **Tasks**:
-1. Implement `parse_article_image(html)` in `src/parser.py`
-2. Look for: og:image meta tag, main article image, hero image
-3. Priority order (try multiple selectors)
-4. Validate URL is absolute (not relative)
-5. Print image URL
+1. Test summarization with real articles from database
+2. Evaluate summary quality (length, bullet format, content)
+3. Refine prompt for better results
+4. Test with multiple article types (news, reviews, announcements)
+5. Document prompt guidelines
 
 **Verification**:
 ```bash
 source venv/bin/activate
-python -c "from src.parser import parse_article_image; img_url = parse_article_image(open('data/article_sample.html').read()); print(img_url)"
-# Copy URL and open in browser - verify it's an image
+# Note: Requires ANTHROPIC_API_KEY configured in .env
+python -c "
+from src.database import get_all_articles
+from src.summarizer import summarize_article
+articles = get_all_articles(limit=1)
+if articles:
+    a = articles[0]
+    summary = summarize_article(a['title'], a['content'])
+    print(f'Title: {a[\"title\"]}')
+    print(f'Summary: {summary}')
+    print(f'Length: {len(summary)} chars')
+"
+```
+
+**Expected Output**:
+```
+Title: Backbone teams with PlayStation for new Death Stranding 2-themed controller
+Summary:
+• Backbone partners with PlayStation for Death Stranding 2 controller
+• Features custom artwork from post-apocalyptic game setting
+• Pre-orders start next month, compatible with iOS and Android
+• Includes signature Backbone features like low-latency gameplay
+Length: 243 chars
 ```
 
 **Acceptance Criteria**:
-- [ ] Returns valid image URL
-- [ ] URL opens in browser showing image
-- [ ] Image is relevant to article (not logo/icon)
-- [ ] Function handles missing images gracefully
+- [ ] Summaries are 200-300 characters
+- [ ] Format is 3-5 bullet points with • bullets
+- [ ] Content is concise and informative
+- [ ] Works well with different article types
+- [ ] Prompt documented in code
 
 **On Completion**:
 1. Update `PROGRESS.md`:
-   - Mark M1.6 as complete: `- [x] M1.6: Extract Image URL`
-   - Update milestone count to 10/89
-2. Update this file to point to M1.7
-3. Git commit: `git add src/parser.py && git commit -m "Phase 1: M1.6 - Article image URL extraction"`
+   - Mark M6.2 as complete: `- [x] M6.2: Summarization Prompt Engineering`
+   - Update milestone count to 41/89
+2. Update this file to point to M6.3
+3. Git commit: `git commit -m "Phase 6: M6.2 - Summarization Prompt Engineering"`
 
 ---
 
 ## What Comes Next
 
-After M1.6, proceed to:
-- **M1.7** - Integrate Full Article Extraction (30 min)
+After M6.2:
+- **M6.3**: Summarize Single Article (30 min) - CLI integration
+- **M6.4**: Store Summary in DB (20 min) - Database updates
+- **M6.5**: Batch Summarization (45 min) - Process multiple articles
+- **M6.6**: Cost Tracking (20 min) - Persistent cost logging
+- **M6.7**: Integrate into Main Pipeline (30 min) - Full integration
 
 ---
 
 ## Quick Reference
 
-**Current Phase Documentation**: See `docs/DEVELOPMENT_PLAN.md` - Phase 1
-**Overall Progress**: See `PROGRESS.md`
+**Current Phase Documentation**: See `docs/DEVELOPMENT_PLAN.md` - Phase 6
+**Overall Progress**: See `PROGRESS.md` (40/89 milestones - 44.9%)
 **Project Requirements**: See `docs/PROJECT_BRIEF.md`
 
 **Previous Milestones Completed**:
-- Phase 0 - All milestones complete ✅
-- M1.1 - Fetch Homepage HTML ✅
-- M1.2 - Parse Article Links ✅
-- M1.3 - Fetch Single Article Page ✅
-- M1.4 - Extract Article Metadata ✅
-- M1.5 - Extract Article Content ✅
+- Phase 0-5 - All complete ✅
+- M6.1 - AI Client Setup ✅
+
+---
+
+## Notes
+
+**API Key Configuration:**
+The summarizer module requires ANTHROPIC_API_KEY to be set in .env file.
+Without a valid API key, the module will fail with APIKeyError.
+
+For testing without API costs, the module structure can be validated with:
+```bash
+python -c "from src.summarizer import get_client, summarize_article; print('Module ready')"
+```

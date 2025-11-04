@@ -9,10 +9,13 @@ lxml==5.1.0
 Pillow==10.1.0
 
 # AI summarization
-anthropic==0.18.0
+anthropic==0.72.0
 
 # Configuration
 python-dotenv==1.0.0
 
 # Scheduling
 APScheduler==3.10.4
+
+# Testing
+pytest==7.4.3
