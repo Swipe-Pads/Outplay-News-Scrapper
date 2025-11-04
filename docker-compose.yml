@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swipepads-scraper
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SCRAPER_RATE_LIMIT_SECONDS=2
+      - LOG_LEVEL=INFO
+      - ARTICLE_RETENTION_DAYS=30
+
+    # Volume mounts for persistence
+    volumes:
+      - ./data:/app/data              # Database
+      - ./images:/app/images          # Downloaded images
+      - ./logs:/app/logs              # Application logs
+      - ./exports:/app/exports        # Exported files
+      - ./test_data:/app/test_data    # Test data (optional)
+
+    # Network mode
+    network_mode: bridge
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Labels for organization
+    labels:
+      - "com.swipepads.app=news-scraper"
+      - "com.swipepads.version=1.0.0"
+
+  # Optional: One-off commands
+  # Uncomment sections below to use
+
+  # Verification service (run once)
+  # verify:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: swipepads-verify
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./images:/app/images
+  #     - ./logs:/app/logs
+  #     - ./exports:/app/exports
+  #   command: python src/verify_system.py
+  #   profiles:
+  #     - tools
+
+  # Manual scrape service (run on demand)
+  # scrape-now:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: swipepads-scrape
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./images:/app/images
+  #     - ./logs:/app/logs
+  #   command: python src/pipeline.py --batch --limit 20 --summarize
+  #   profiles:
+  #     - tools
+
+  # Export service (run on demand)
+  # export:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: swipepads-export
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./exports:/app/exports
+  #   command: python src/export_cli.py --format json --validate
+  #   profiles:
+  #     - tools
+
+volumes:
+  data:
+  images:
+  logs:
+  exports:

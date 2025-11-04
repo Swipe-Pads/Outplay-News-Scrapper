@@ -1,0 +1,82 @@
+version: '3.8'
+
+# Production configuration for SwipePads News Scraper
+
+services:
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swipepads-scraper-prod
+    restart: always  # Always restart in production
+
+    # Environment variables
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SCRAPER_RATE_LIMIT_SECONDS=3  # More conservative in prod
+      - LOG_LEVEL=INFO
+      - ARTICLE_RETENTION_DAYS=30
+
+    # Volume mounts for persistence
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        compress: "true"
+
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "from src.database import get_article_count; exit(0 if get_article_count() >= 0 else 1)"]
+      interval: 5m
+      timeout: 30s
+      retries: 3
+      start_period: 1m
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Needs write access for database
+    tmpfs:
+      - /tmp
+
+    # Labels
+    labels:
+      - "com.swipepads.app=news-scraper"
+      - "com.swipepads.env=production"
+      - "com.swipepads.version=1.0.0"
+
+    # Network
+    networks:
+      - scraper-network
+
+networks:
+  scraper-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
+  images:
+    driver: local
+  logs:
+    driver: local
+  exports:
+    driver: local
