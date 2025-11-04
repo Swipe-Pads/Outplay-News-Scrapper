@@ -20,6 +20,7 @@ from src.parser import extract_full_article
 from src.image_downloader import download_image, ImageDownloadError
 from src.database import init_db, insert_article, article_exists, DatabaseError
 from src.config import Config
+from src.summarizer import summarize_article, SummarizationError
 
 
 # Configure logging
@@ -31,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def process_single_article(url: str, skip_existing: bool = True) -> Optional[Dict]:
+def process_single_article(url: str, skip_existing: bool = True, summarize: bool = False) -> Optional[Dict]:
     """
     Process a single article through the complete pipeline.
 
@@ -40,11 +41,13 @@ def process_single_article(url: str, skip_existing: bool = True) -> Optional[Dic
     2. Fetch article HTML
     3. Extract all metadata, content, and image URL
     4. Download and validate article image
-    5. Store article in database with image path
+    5. Generate AI summary (optional)
+    6. Store article in database with image path and summary
 
     Args:
         url: Article URL to process
         skip_existing: If True, skip articles that already exist in DB
+        summarize: If True, generate AI summary for the article
 
     Returns:
         Article dictionary with all fields, or None if failed/skipped
@@ -117,7 +120,23 @@ def process_single_article(url: str, skip_existing: bool = True) -> Optional[Dic
         logger.info("No image URL found, skipping image download")
         article['image_path'] = None
 
-    # Step 5: Store in database
+    # Step 5: Generate AI summary (optional)
+    if summarize and article.get('content'):
+        try:
+            logger.info("Generating AI summary...")
+            summary = summarize_article(article['title'], article['content'])
+            article['summary'] = summary
+            logger.info(f"Summary generated ({len(summary)} chars)")
+        except SummarizationError as e:
+            logger.warning(f"Summarization failed: {e}")
+            article['summary'] = None
+        except Exception as e:
+            logger.warning(f"Unexpected error during summarization: {e}")
+            article['summary'] = None
+    else:
+        article['summary'] = None
+
+    # Step 6: Store in database
     try:
         logger.info("Storing article in database...")
         article_id = insert_article(article)
@@ -165,7 +184,8 @@ def get_article_urls_from_listing(limit: int = 20) -> List[str]:
 def process_batch(
     urls: List[str],
     rate_limit: float = None,
-    skip_existing: bool = True
+    skip_existing: bool = True,
+    summarize: bool = False
 ) -> Dict[str, any]:
     """
     Process multiple articles in batch.
@@ -174,6 +194,7 @@ def process_batch(
         urls: List of article URLs to process
         rate_limit: Seconds to wait between requests (default: from config)
         skip_existing: If True, skip articles that already exist
+        summarize: If True, generate AI summaries for articles
 
     Returns:
         Dictionary with batch statistics:
@@ -197,6 +218,7 @@ def process_batch(
     logger.info("=" * 60)
     logger.info(f"BATCH PROCESSING: {stats['total']} articles")
     logger.info(f"Rate limit: {rate_limit} seconds between requests")
+    logger.info(f"AI Summarization: {'ENABLED' if summarize else 'DISABLED'}")
     logger.info("=" * 60)
 
     start_time = time.time()
@@ -205,7 +227,7 @@ def process_batch(
         logger.info(f"\n[{idx}/{stats['total']}] Processing: {url}")
 
         try:
-            result = process_single_article(url, skip_existing=skip_existing)
+            result = process_single_article(url, skip_existing=skip_existing, summarize=summarize)
 
             if result is None:
                 stats['skipped'] += 1
@@ -284,6 +306,11 @@ def main():
         help='Process even if article already exists'
     )
     parser.add_argument(
+        '--summarize',
+        action='store_true',
+        help='Generate AI summaries for articles'
+    )
+    parser.add_argument(
         '--verbose',
         action='store_true',
         help='Enable verbose logging (DEBUG level)'
@@ -307,7 +334,7 @@ def main():
                 print("⚠️  No articles found to process")
                 sys.exit(0)
 
-            stats = process_batch(urls, skip_existing=not args.force)
+            stats = process_batch(urls, skip_existing=not args.force, summarize=args.summarize)
 
             # Print summary
             print("\n" + "=" * 60)
@@ -328,7 +355,8 @@ def main():
             # Single article mode
             result = process_single_article(
                 args.url,
-                skip_existing=not args.force
+                skip_existing=not args.force,
+                summarize=args.summarize
             )
 
             if result:

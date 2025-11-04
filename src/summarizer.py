@@ -15,6 +15,7 @@ import logging
 from typing import Optional, Dict
 from anthropic import Anthropic, APIError, APIConnectionError, RateLimitError
 from src.config import Config
+from src.cost_logger import cost_logger
 
 # Set up logging
 logging.basicConfig(
@@ -129,7 +130,7 @@ def test_connection() -> bool:
 
         # Send a simple test prompt
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-20250514",
             max_tokens=50,
             messages=[
                 {"role": "user", "content": "Say 'Connection successful' and nothing else."}
@@ -140,6 +141,16 @@ def test_connection() -> bool:
         cost_tracker.add_usage(
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens
+        )
+
+        # Log to persistent storage
+        cost_estimate = cost_tracker.get_cost_estimate()
+        cost_logger.log_usage(
+            operation="test_connection",
+            model=response.model,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cost=cost_estimate['total_cost']
         )
 
         logger.info(f"✅ Connected to Anthropic API")
@@ -167,7 +178,7 @@ def test_connection() -> bool:
 def summarize_article(
     title: str,
     content: str,
-    model: str = "claude-3-5-sonnet-20241022",
+    model: str = "claude-sonnet-4-20250514",
     max_tokens: int = 300
 ) -> str:
     """
@@ -176,7 +187,7 @@ def summarize_article(
     Args:
         title: Article title
         content: Full article content
-        model: Claude model to use (default: claude-3-5-sonnet-20241022)
+        model: Claude model to use (default: claude-sonnet-4-20250514)
         max_tokens: Maximum tokens for summary (default: 300)
 
     Returns:
@@ -189,16 +200,21 @@ def summarize_article(
         client = get_client()
 
         # Construct prompt for summarization
-        prompt = f"""Please summarize the following news article in 3-5 concise bullet points.
-The entire summary should be 200-300 characters total.
-Focus on the key information that would interest busy mobile game enthusiasts.
+        prompt = f"""Summarize this mobile gaming news article in 3-5 bullet points.
+
+STRICT REQUIREMENTS:
+• Total summary length: 200-300 characters (not words!)
+• Use • bullet character
+• Each bullet: one short, punchy statement
+• Focus on key facts mobile gamers care about
+• NO introductory text, ONLY bullets
 
 Title: {title}
 
 Content:
 {content[:2000]}
 
-Format your response as bullet points (use • for bullets), with each point being a short, punchy statement."""
+Format: Just the bullets, nothing else."""
 
         logger.info(f"Generating summary for: {title[:50]}...")
 
@@ -214,6 +230,17 @@ Format your response as bullet points (use • for bullets), with each point bei
         cost_tracker.add_usage(
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens
+        )
+
+        # Log to persistent storage
+        cost_estimate = cost_tracker.get_cost_estimate()
+        cost_logger.log_usage(
+            operation="summarize_article",
+            model=response.model,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cost=(response.usage.input_tokens / 1_000_000) * 3.0 + (response.usage.output_tokens / 1_000_000) * 15.0,
+            metadata={'title': title[:100]}
         )
 
         # Extract summary text
