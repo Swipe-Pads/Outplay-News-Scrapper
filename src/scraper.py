@@ -15,19 +15,24 @@ from typing import List
 from src.config import Config
 
 
-def fetch_page(url: str, save_to: str = None) -> str:
+def fetch_page(url: str, save_to: str = None, fallback_file: str = None) -> str:
     """
-    Fetch HTML content from a URL.
+    Fetch HTML content from a URL or local file.
 
     Args:
         url: The URL to fetch
         save_to: Optional path to save the HTML (relative to project root)
+        fallback_file: Optional local HTML file to use if URL fetch fails
 
     Returns:
         str: The HTML content
 
     Raises:
-        requests.RequestException: If the request fails
+        requests.RequestException: If the request fails and no fallback available
+
+    Note:
+        In environments where external requests are blocked, this will automatically
+        fallback to local HTML files for testing if fallback_file is provided.
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -63,11 +68,46 @@ def fetch_page(url: str, save_to: str = None) -> str:
         return html_content
 
     except requests.Timeout:
+        if fallback_file:
+            print(f"⚠️  Timeout fetching {url}, using fallback file: {fallback_file}")
+            return _load_fallback_file(fallback_file)
         raise requests.RequestException(f"Timeout while fetching {url}")
     except requests.HTTPError as e:
+        if fallback_file and e.response.status_code == 403:
+            print(f"⚠️  Access denied (403) fetching {url}, using fallback file: {fallback_file}")
+            return _load_fallback_file(fallback_file)
         raise requests.RequestException(f"HTTP error {e.response.status_code} while fetching {url}")
     except requests.RequestException as e:
+        if fallback_file:
+            print(f"⚠️  Error fetching {url}: {e}")
+            print(f"   Using fallback file: {fallback_file}")
+            return _load_fallback_file(fallback_file)
         raise requests.RequestException(f"Error fetching {url}: {e}")
+
+
+def _load_fallback_file(fallback_path: str) -> str:
+    """
+    Load HTML content from a local file.
+
+    Args:
+        fallback_path: Path to local HTML file
+
+    Returns:
+        HTML content from file
+
+    Raises:
+        FileNotFoundError: If fallback file doesn't exist
+    """
+    file_path = Path(fallback_path)
+    if not file_path.exists():
+        # Try relative to project root
+        project_root = Path(__file__).parent.parent
+        file_path = project_root / fallback_path
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"Fallback file not found: {fallback_path}")
+
+    return file_path.read_text(encoding='utf-8')
 
 
 def parse_article_links(html: str, limit: int = None) -> List[str]:
