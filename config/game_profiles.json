@@ -1,0 +1,31 @@
+{
+  "games": {
+    "Delta Force": {
+      "twitter_url": "https://x.com/DeltaForce_Game",
+      "twitter_handle": "DeltaForce_Game",
+      "facebook_url": "https://www.facebook.com/share/1FgeJPgHdX/",
+      "enabled": true,
+      "fallback_twitter": "test_data/social/twitter_deltaforce.html"
+    },
+    "Clash Royale": {
+      "twitter_url": "https://x.com/ClashRoyale",
+      "twitter_handle": "ClashRoyale",
+      "facebook_url": "https://www.facebook.com/clashroyale",
+      "enabled": false,
+      "fallback_twitter": null
+    },
+    "PUBG Mobile": {
+      "twitter_url": "https://x.com/PUBGMOBILE",
+      "twitter_handle": "PUBGMOBILE",
+      "facebook_url": "https://www.facebook.com/PUBGMOBILE",
+      "enabled": false,
+      "fallback_twitter": null
+    }
+  },
+  "settings": {
+    "scrape_frequency_hours": 12,
+    "max_posts_per_scrape": 20,
+    "download_images": true,
+    "download_videos": false
+  }
+}

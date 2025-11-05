@@ -17,5 +17,8 @@ python-dotenv==1.0.0
 # Scheduling
 APScheduler==3.10.4
 
+# Social media scraping
+playwright==1.40.0
+
 # Testing
 pytest==7.4.3

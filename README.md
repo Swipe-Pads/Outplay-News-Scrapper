@@ -72,6 +72,33 @@ make help        # Show all commands
 | **Data Retention** | ✅ Ready | 30-day automatic cleanup |
 | **Monitoring** | ✅ Ready | Hourly health checks |
 | **Docker** | ✅ Ready | One-command deployment |
+| **Social Media** | ✅ New! | Twitter/X scraping extension |
+
+---
+
+## 🆕 Social Media Extension
+
+**NEW**: Scrape Twitter/X posts from game-related accounts!
+
+- 🐦 **Twitter/X Support**: Extract tweets with full metadata
+- 🎯 **Content Detection**: Auto-classify posts (text, image, video, YouTube)
+- 📊 **Engagement Metrics**: Track likes, retweets, comments, views
+- 🗄️ **Database Storage**: Integrated with existing SQLite database
+- 🎮 **Multi-Game**: Configure multiple game profiles
+
+**Quick Start:**
+```bash
+# Initialize database
+python src/social_scraper_cli.py --init-db
+
+# Scrape Delta Force Twitter
+python src/social_scraper_cli.py --game "Delta Force"
+
+# View stats
+python src/social_scraper_cli.py --stats
+```
+
+**Full documentation**: [SOCIAL_MEDIA_EXTENSION.md](SOCIAL_MEDIA_EXTENSION.md)
 
 ---
 
