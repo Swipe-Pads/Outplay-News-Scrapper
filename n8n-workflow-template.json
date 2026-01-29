@@ -1,0 +1,284 @@
+{
+  "name": "Gaming News Scraper - Pocket Gamer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.pocketgamer.com/news/",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch News Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse HTML to extract article URLs\nconst cheerio = require('cheerio');\nconst html = $input.item.json.data;\nconst $ = cheerio.load(html);\n\nconst articles = [];\n$('article.item').each((i, elem) => {\n  const $elem = $(elem);\n  const url = $elem.find('a').attr('href');\n  const title = $elem.find('h3').text().trim();\n  const date = $elem.find('time').attr('datetime');\n  \n  if (url && title) {\n    articles.push({\n      url: url.startsWith('http') ? url : `https://www.pocketgamer.com${url}`,\n      title: title,\n      date: date || new Date().toISOString()\n    });\n  }\n});\n\nreturn articles.slice(0, 5).map(article => ({json: article}));"
+      },
+      "name": "Extract Article URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch Article Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse article page to extract content\nconst cheerio = require('cheerio');\nconst html = $input.item.json.data;\nconst $ = cheerio.load(html);\n\n// Extract article metadata\nconst article = {\n  url: $input.item.json.url,\n  title: $('h1.article-title').text().trim() || $input.item.json.title,\n  date: $('time').attr('datetime') || $input.item.json.date,\n  author: $('.author-name').text().trim() || 'Unknown',\n  content: '',\n  imageUrl: $('meta[property=\"og:image\"]').attr('content') || ''\n};\n\n// Extract content paragraphs\nconst paragraphs = [];\n$('article .article-body p').each((i, elem) => {\n  const text = $(elem).text().trim();\n  if (text && text.length > 20) {\n    paragraphs.push(text);\n  }\n});\n\narticle.content = paragraphs.join('\\n\\n');\n\nreturn {json: article};"
+      },
+      "name": "Parse Article",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "model": "claude-sonnet-4-20250514",
+        "prompt": "=Summarize this gaming news article in 200-300 characters. Focus on the key announcement or development. Be concise and engaging.\n\nTitle: {{$json.title}}\nContent: {{$json.content}}",
+        "options": {
+          "maxTokens": 100
+        }
+      },
+      "name": "Claude AI Summarize",
+      "type": "n8n-nodes-base.anthropic",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine article data with AI summary\nconst article = $input.item.json;\nconst summary = $('Claude AI Summarize').item.json.content[0].text;\n\nreturn {\n  json: {\n    url: article.url,\n    title: article.title,\n    date: article.date,\n    author: article.author,\n    content: article.content,\n    summary: summary,\n    imageUrl: article.imageUrl,\n    scrapedAt: new Date().toISOString()\n  }\n};"
+      },
+      "name": "Combine Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "articles",
+        "columns": "url,title,date,author,content,summary,image_url,scraped_at",
+        "options": {
+          "queryBatching": "independently"
+        }
+      },
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.error}}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Check for Errors",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "articlesProcessed",
+              "value": "={{$json.length}}"
+            }
+          ]
+        }
+      },
+      "name": "Success Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "error",
+              "value": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "name": "Error Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [2050, 400]
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch News Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch News Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Article URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Article URLs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Article Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Article Content": {
+      "main": [
+        [
+          {
+            "node": "Parse Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Article": {
+      "main": [
+        [
+          {
+            "node": "Claude AI Summarize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude AI Summarize": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Data": {
+      "main": [
+        [
+          {
+            "node": "Save to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Database": {
+      "main": [
+        [
+          {
+            "node": "Check for Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Errors": {
+      "main": [
+        [
+          {
+            "node": "Success Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "instanceId": "your_instance_id"
+  },
+  "tags": []
+}
