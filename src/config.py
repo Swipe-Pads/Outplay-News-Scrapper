@@ -49,6 +49,11 @@ class Config:
     TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "")
     TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET", "")
 
+    # Google Trends API (v1alpha)
+    GOOGLE_TRENDS_SERVICE_ACCOUNT = os.getenv("GOOGLE_TRENDS_SERVICE_ACCOUNT", "")
+    GOOGLE_TRENDS_CREDENTIALS = os.getenv("GOOGLE_TRENDS_CREDENTIALS", "")
+    GOOGLE_TRENDS_TOKEN = os.getenv("GOOGLE_TRENDS_TOKEN", "")
+
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FILE = os.getenv("LOG_FILE", str(LOGS_DIR / "scraper.log"))

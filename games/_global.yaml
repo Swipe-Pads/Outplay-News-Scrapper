@@ -1,0 +1,82 @@
+# Global Gaming News Sources
+# These are scraped every run regardless of game-specific configs.
+# Articles are auto-tagged to games by the AI summarizer.
+
+name: "Global Gaming News"
+slug: "_global"
+is_global: true
+
+sources:
+  # P0 — Major mobile gaming portals
+  - type: web
+    priority: P0
+    url: "https://www.pocketgamer.com/news/"
+    link_pattern: "/news/"
+    limit: 20
+    name: "Pocket Gamer"
+
+  - type: web
+    priority: P0
+    url: "https://www.toucharcade.com/"
+    link_pattern: "toucharcade.com/20"
+    limit: 15
+    name: "TouchArcade"
+
+  # P1 — General gaming portals with mobile coverage
+  - type: web
+    priority: P1
+    url: "https://www.dexerto.com/mobile-games/"
+    link_pattern: "/mobile-games/"
+    limit: 15
+    name: "Dexerto Mobile"
+
+  - type: web
+    priority: P1
+    url: "https://dotesports.com/mobile"
+    link_pattern: "/mobile/"
+    limit: 10
+    name: "Dot Esports Mobile"
+
+  - type: web
+    priority: P1
+    url: "https://www.gamesradar.com/mobile/"
+    link_pattern: "/mobile/"
+    limit: 10
+    name: "GamesRadar Mobile"
+
+  # P2 — Community aggregators
+  - type: reddit
+    priority: P2
+    subreddit: "AndroidGaming"
+    flair_filters:
+      - News
+      - Article
+    sort: hot
+    limit: 15
+    name: "Reddit r/AndroidGaming"
+
+  - type: reddit
+    priority: P2
+    subreddit: "iosgaming"
+    flair_filters: null
+    sort: hot
+    limit: 15
+    name: "Reddit r/iosgaming"
+
+  - type: reddit
+    priority: P2
+    subreddit: "gachagaming"
+    flair_filters:
+      - News
+      - Official
+    sort: hot
+    limit: 10
+    name: "Reddit r/gachagaming"
+
+  # P3 — YouTube general mobile gaming
+  - type: youtube
+    priority: P3
+    search_term: "mobile gaming news"
+    max_age_days: 3
+    limit: 10
+    name: "YouTube - Mobile Gaming News"
