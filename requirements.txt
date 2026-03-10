@@ -1,21 +1,22 @@
-# SwipePads News Scraper - Python Dependencies
-
-# Web scraping
+# HTTP & Scraping
 requests==2.31.0
 beautifulsoup4==4.12.2
 lxml==5.1.0
 
-# Image processing
+# Image validation
 Pillow==10.1.0
 
-# AI summarization
+# AI Summarization
 anthropic==0.72.0
 
 # Configuration
 python-dotenv==1.0.0
 
-# Scheduling
-APScheduler==3.10.4
+# Game config (YAML)
+PyYAML==6.0.2
 
 # Testing
 pytest==7.4.3
+
+# Scheduling (optional, used by APScheduler if running locally)
+APScheduler==3.10.4

@@ -1,0 +1,28 @@
+name: "Mobile Legends: Bang Bang"
+slug: "mobile-legends"
+platform: "mobile"
+strapi_game_slug: "mobile-legends"
+
+sources:
+  - type: reddit
+    priority: P0
+    subreddit: "MobileLegendsGame"
+    flair_filters:
+      - News
+      - Update
+      - Patch Notes
+    sort: hot
+    limit: 15
+    name: "Reddit r/MobileLegendsGame"
+
+  - type: youtube
+    priority: P1
+    search_term: "Mobile Legends update"
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - MLBB Trending"
+
+metadata:
+  developer: "Moonton"
+  publisher: "Moonton"
+  genre: "MOBA"

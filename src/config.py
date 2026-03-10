@@ -1,100 +1,110 @@
 """
-Configuration module for SwipePads News Scraper.
-Loads settings from environment variables using python-dotenv.
+Configuration management for the Outplay News Scraper.
+Loads settings from .env file and exposes as class properties.
 """
 
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-# Look for .env in project root (parent of src/)
+# Load .env from project root
 PROJECT_ROOT = Path(__file__).parent.parent
-ENV_PATH = PROJECT_ROOT / '.env'
-
-load_dotenv(dotenv_path=ENV_PATH)
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 class Config:
-    """
-    Configuration class that loads all settings from environment variables.
+    """Application configuration loaded from environment variables."""
 
-    Usage:
-        from src.config import Config
-        print(Config.USER_AGENT)
-    """
-
-    # API Keys
-    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-
-    # Scraper Settings
-    USER_AGENT = os.getenv('SCRAPER_USER_AGENT', 'SwipePadsScraper/1.0')
-    RATE_LIMIT_SECONDS = int(os.getenv('SCRAPER_RATE_LIMIT_SECONDS', '2'))
+    # Project paths
+    PROJECT_ROOT = PROJECT_ROOT
+    DATA_DIR = PROJECT_ROOT / "data"
+    IMAGES_DIR = PROJECT_ROOT / "images"
+    EXPORTS_DIR = PROJECT_ROOT / "exports"
+    LOGS_DIR = PROJECT_ROOT / "logs"
+    GAMES_DIR = PROJECT_ROOT / "games"
 
     # Database
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/articles.db')
+    DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "articles.db"))
+
+    # Scraper settings
+    USER_AGENT = os.getenv("SCRAPER_USER_AGENT", "OutplayNewsScraper/1.0")
+    RATE_LIMIT_SECONDS = float(os.getenv("SCRAPER_RATE_LIMIT_SECONDS", "2"))
+
+    # AI API
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+    # Strapi Cloud
+    STRAPI_URL = os.getenv("STRAPI_URL", "")
+    STRAPI_TOKEN = os.getenv("STRAPI_TOKEN", "")
+
+    # Reddit API
+    REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
+    REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
+
+    # YouTube API
+    YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
+
+    # Twitch API (future)
+    TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "")
+    TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET", "")
 
     # Logging
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE = os.getenv('LOG_FILE', 'logs/scraper.log')
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FILE = os.getenv("LOG_FILE", str(LOGS_DIR / "scraper.log"))
 
-    # Retention
-    ARTICLE_RETENTION_DAYS = int(os.getenv('ARTICLE_RETENTION_DAYS', '30'))
-
-    # Derived paths (relative to project root)
-    DATABASE_FULL_PATH = PROJECT_ROOT / DATABASE_PATH
-    LOG_FILE_FULL_PATH = PROJECT_ROOT / LOG_FILE
+    # Content settings
+    ARTICLE_RETENTION_DAYS = int(os.getenv("ARTICLE_RETENTION_DAYS", "30"))
+    CONTENT_EXPIRY_DAYS = int(os.getenv("CONTENT_EXPIRY_DAYS", "7"))
+    MAX_ARTICLES_PER_GAME = int(os.getenv("MAX_ARTICLES_PER_GAME", "10"))
 
     @classmethod
-    def validate(cls, provider=None):
-        """
-        Validate that required configuration is present.
+    def validate(cls) -> list:
+        """Validate configuration. Returns list of warnings."""
+        warnings = []
 
-        Args:
-            provider: Specific provider to validate ('anthropic', 'openai', or None for any)
+        if not cls.ANTHROPIC_API_KEY or cls.ANTHROPIC_API_KEY.startswith("sk-ant-api03-xxx"):
+            warnings.append("ANTHROPIC_API_KEY not configured")
 
-        Returns tuple: (is_valid, error_message)
-        """
-        # If no provider specified, check that at least one is valid
-        if provider is None:
-            has_anthropic = cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower()
-            has_openai = cls.OPENAI_API_KEY and 'your_' not in cls.OPENAI_API_KEY.lower()
+        if not cls.STRAPI_URL:
+            warnings.append("STRAPI_URL not configured")
+        if not cls.STRAPI_TOKEN:
+            warnings.append("STRAPI_TOKEN not configured")
 
-            if not has_anthropic and not has_openai:
-                return False, "No valid AI API key configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env"
+        if not cls.REDDIT_CLIENT_ID:
+            warnings.append("REDDIT_CLIENT_ID not configured (Reddit scraper won't work)")
+        if not cls.YOUTUBE_API_KEY:
+            warnings.append("YOUTUBE_API_KEY not configured (YouTube scraper won't work)")
 
-            return True, "Configuration valid"
-
-        # Validate specific provider
-        if provider == 'anthropic':
-            if not cls.ANTHROPIC_API_KEY:
-                return False, "ANTHROPIC_API_KEY not set in .env"
-            if 'your_' in cls.ANTHROPIC_API_KEY.lower():
-                return False, "ANTHROPIC_API_KEY contains placeholder value. Please update .env with real key."
-            return True, "Anthropic API key valid"
-
-        if provider == 'openai':
-            if not cls.OPENAI_API_KEY:
-                return False, "OPENAI_API_KEY not set in .env"
-            if 'your_' in cls.OPENAI_API_KEY.lower():
-                return False, "OPENAI_API_KEY contains placeholder value. Please update .env with real key."
-            return True, "OpenAI API key valid"
-
-        return False, f"Unknown provider: {provider}"
+        return warnings
 
     @classmethod
-    def get_ai_provider(cls):
-        """
-        Determine which AI provider to use based on available keys.
-        Returns: 'anthropic', 'openai', or None
-        """
-        if cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower():
-            return 'anthropic'
-        elif cls.OPENAI_API_KEY and 'your_' not in cls.OPENAI_API_KEY.lower():
-            return 'openai'
-        return None
+    def get_ai_provider(cls) -> str:
+        """Detect configured AI provider. Prioritizes Anthropic."""
+        if cls.ANTHROPIC_API_KEY and not cls.ANTHROPIC_API_KEY.startswith("sk-ant-api03-xxx"):
+            return "anthropic"
+        if cls.OPENAI_API_KEY and not cls.OPENAI_API_KEY.startswith("sk-xxx"):
+            return "openai"
+        return "none"
+
+    @classmethod
+    def ensure_directories(cls):
+        """Create required directories if they don't exist."""
+        for d in [cls.DATA_DIR, cls.IMAGES_DIR, cls.EXPORTS_DIR, cls.LOGS_DIR, cls.GAMES_DIR]:
+            d.mkdir(parents=True, exist_ok=True)
 
 
-# For convenience, export Config as default
-__all__ = ['Config']
+if __name__ == "__main__":
+    Config.ensure_directories()
+    warnings = Config.validate()
+    if warnings:
+        print("⚠️  Configuration warnings:")
+        for w in warnings:
+            print(f"  - {w}")
+    else:
+        print("✅ Configuration OK")
+
+    print(f"\nProject root: {Config.PROJECT_ROOT}")
+    print(f"AI provider: {Config.get_ai_provider()}")
+    print(f"Database: {Config.DATABASE_PATH}")
+    print(f"Strapi URL: {Config.STRAPI_URL or '(not set)'}")

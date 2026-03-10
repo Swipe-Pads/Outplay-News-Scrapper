@@ -1,0 +1,28 @@
+name: "Brawl Stars"
+slug: "brawl-stars"
+platform: "mobile"
+strapi_game_slug: "brawl-stars"
+
+sources:
+  - type: reddit
+    priority: P0
+    subreddit: "BrawlStars"
+    flair_filters:
+      - News
+      - Update
+      - Official
+    sort: hot
+    limit: 15
+    name: "Reddit r/BrawlStars"
+
+  - type: youtube
+    priority: P1
+    channel_id: "UCE25sLIXfLbIyVCDwmHvFSg"  # Brawl Stars official
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - Brawl Stars Official"
+
+metadata:
+  developer: "Supercell"
+  publisher: "Supercell"
+  genre: "MOBA / Brawler"

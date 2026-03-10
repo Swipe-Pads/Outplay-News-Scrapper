@@ -1,0 +1,79 @@
+# Call of Duty: Mobile — Pilot Game Configuration
+# This is the primary test game for the Outplay News Scraper pipeline.
+
+name: "Call of Duty: Mobile"
+slug: "cod-mobile"
+platform: "mobile"
+strapi_game_slug: "cod-mobile"
+
+sources:
+  # P0 — Primary sources (always scraped)
+  - type: reddit
+    priority: P0
+    subreddit: "CallOfDutyMobile"
+    flair_filters:
+      - News
+      - Update
+      - Announcement
+      - Official
+    sort: hot
+    limit: 15
+    name: "Reddit r/CallOfDutyMobile"
+
+  - type: reddit
+    priority: P0
+    subreddit: "CoDMCompetitive"
+    flair_filters: null  # All flairs
+    sort: hot
+    limit: 10
+    name: "Reddit r/CoDMCompetitive"
+
+  - type: web
+    priority: P0
+    url: "https://www.pocketgamer.com/call-of-duty-mobile/"
+    link_pattern: "/call-of-duty-mobile/"
+    limit: 10
+    name: "Pocket Gamer - CoD Mobile"
+
+  # P1 — Secondary sources
+  - type: youtube
+    priority: P1
+    channel_id: "UCQMbMlSLfb_bBCnCjOQ7Q0w"  # CoD Mobile Esports
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - CoD Mobile Esports"
+
+  - type: youtube
+    priority: P1
+    search_term: "Call of Duty Mobile update"
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - CoD Mobile Trending"
+
+  # P2 — Tertiary sources
+  - type: web
+    priority: P2
+    url: "https://www.callofduty.com/blog"
+    link_pattern: "/blog/"
+    limit: 5
+    name: "Call of Duty Official Blog"
+
+  # P3 — Low priority
+  - type: web
+    priority: P3
+    url: "https://charlieintel.com/category/cod-mobile/"
+    link_pattern: "/cod-mobile/"
+    limit: 5
+    name: "Charlie Intel - CoD Mobile"
+
+metadata:
+  developer: "TiMi Studio Group"
+  publisher: "Activision"
+  genre: "FPS"
+  app_store_url: "https://apps.apple.com/app/call-of-duty-mobile/id1287282214"
+  play_store_url: "https://play.google.com/store/apps/details?id=com.activision.callofduty.shooter"
+
+social:
+  twitter: "@PlayCODMobile"
+  discord: "https://discord.gg/codm"
+  official_site: "https://www.callofduty.com/mobile"

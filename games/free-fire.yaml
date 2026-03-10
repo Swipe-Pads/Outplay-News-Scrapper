@@ -1,0 +1,27 @@
+name: "Free Fire"
+slug: "free-fire"
+platform: "mobile"
+strapi_game_slug: "free-fire"
+
+sources:
+  - type: reddit
+    priority: P0
+    subreddit: "freefire"
+    flair_filters:
+      - News
+      - Update
+    sort: hot
+    limit: 15
+    name: "Reddit r/freefire"
+
+  - type: youtube
+    priority: P1
+    search_term: "Free Fire update"
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - Free Fire Trending"
+
+metadata:
+  developer: "Garena"
+  publisher: "Garena"
+  genre: "Battle Royale"

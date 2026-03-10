@@ -1,0 +1,28 @@
+name: "PUBG Mobile"
+slug: "pubg-mobile"
+platform: "mobile"
+strapi_game_slug: "pubg-mobile"
+
+sources:
+  - type: reddit
+    priority: P0
+    subreddit: "PUBGMobile"
+    flair_filters:
+      - News
+      - Update
+      - Announcement
+    sort: hot
+    limit: 15
+    name: "Reddit r/PUBGMobile"
+
+  - type: youtube
+    priority: P1
+    search_term: "PUBG Mobile update"
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - PUBG Mobile Trending"
+
+metadata:
+  developer: "LightSpeed & Quantum Studio"
+  publisher: "Tencent"
+  genre: "Battle Royale"

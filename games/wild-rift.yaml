@@ -1,0 +1,28 @@
+name: "League of Legends: Wild Rift"
+slug: "wild-rift"
+platform: "mobile"
+strapi_game_slug: "wild-rift"
+
+sources:
+  - type: reddit
+    priority: P0
+    subreddit: "wildrift"
+    flair_filters:
+      - News
+      - Patch Notes
+      - Announcement
+    sort: hot
+    limit: 15
+    name: "Reddit r/wildrift"
+
+  - type: youtube
+    priority: P1
+    search_term: "Wild Rift update"
+    max_age_days: 7
+    limit: 10
+    name: "YouTube - Wild Rift Trending"
+
+metadata:
+  developer: "Riot Games"
+  publisher: "Riot Games"
+  genre: "MOBA"
