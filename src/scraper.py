@@ -3,11 +3,7 @@ Web scraper module for SwipePads News Scraper.
 Handles fetching and parsing of Pocket Gamer news articles.
 """
 
-import sys
 from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import requests
 from bs4 import BeautifulSoup

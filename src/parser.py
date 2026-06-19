@@ -2,101 +2,80 @@
 Article HTML parser for extracting metadata and content.
 """
 
-import sys
-from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import json
 import re
-from datetime import datetime
-from typing import Dict, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 
 
-def parse_article_metadata(html: str) -> Dict[str, Optional[str]]:
+def _parse_json_ld(soup: BeautifulSoup) -> Optional[dict]:
+    """Extract NewsArticle JSON-LD data from soup. Returns dict or None."""
+    for script in soup.find_all('script', type='application/ld+json'):
+        try:
+            data = json.loads(script.string)
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and item.get('@type') == 'NewsArticle':
+                        return item
+            elif isinstance(data, dict) and data.get('@type') == 'NewsArticle':
+                return data
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+    return None
+
+
+def parse_article_metadata(html: str = None, soup: BeautifulSoup = None, json_ld: dict = None) -> Dict[str, Optional[str]]:
     """
     Extract article metadata (title, date, author) from HTML.
 
     Args:
-        html: Article HTML content
+        html: Article HTML content (used if soup not provided)
+        soup: Pre-parsed BeautifulSoup object
+        json_ld: Pre-parsed JSON-LD data
 
     Returns:
         Dictionary with keys: title, date, author
-        Missing fields will be None
-
-    Example:
-        >>> html = open('data/article_sample.html').read()
-        >>> meta = parse_article_metadata(html)
-        >>> print(meta['title'])
-        'Nominations are now open for the 12th Pocket Gamer Awards'
     """
-    soup = BeautifulSoup(html, 'lxml')
+    if soup is None:
+        soup = BeautifulSoup(html, 'lxml')
+    if json_ld is None:
+        json_ld = _parse_json_ld(soup)
 
-    metadata = {
-        'title': None,
-        'date': None,
-        'author': None,
-    }
+    metadata = {'title': None, 'date': None, 'author': None}
 
-    # Strategy 1: Try JSON-LD structured data (most reliable)
-    json_ld_scripts = soup.find_all('script', type='application/ld+json')
-    for script in json_ld_scripts:
-        try:
-            data = json.loads(script.string)
+    # Strategy 1: JSON-LD structured data (most reliable)
+    if json_ld:
+        if 'headline' in json_ld:
+            metadata['title'] = json_ld['headline']
+        if 'datePublished' in json_ld:
+            metadata['date'] = json_ld['datePublished']
+        if 'author' in json_ld:
+            author_data = json_ld['author']
+            if isinstance(author_data, dict) and 'name' in author_data:
+                metadata['author'] = author_data['name']
+            elif isinstance(author_data, str):
+                metadata['author'] = author_data
 
-            # JSON-LD can be an array of objects
-            if isinstance(data, list):
-                # Look for NewsArticle type
-                for item in data:
-                    if item.get('@type') == 'NewsArticle':
-                        data = item
-                        break
-
-            # Extract from NewsArticle structured data
-            if isinstance(data, dict) and data.get('@type') == 'NewsArticle':
-                if 'headline' in data:
-                    metadata['title'] = data['headline']
-
-                if 'datePublished' in data:
-                    metadata['date'] = data['datePublished']
-
-                if 'author' in data:
-                    author_data = data['author']
-                    if isinstance(author_data, dict) and 'name' in author_data:
-                        metadata['author'] = author_data['name']
-                    elif isinstance(author_data, str):
-                        metadata['author'] = author_data
-
-        except (json.JSONDecodeError, KeyError, TypeError):
-            continue
-
-    # Strategy 2: Fallback to HTML elements if JSON-LD failed
+    # Strategy 2: Fallback to HTML elements
     if not metadata['title']:
-        # Try h1 tag
         h1 = soup.find('h1')
         if h1:
             metadata['title'] = h1.get_text(strip=True)
         else:
-            # Last resort: meta og:title
             og_title = soup.find('meta', property='og:title')
             if og_title and og_title.get('content'):
                 metadata['title'] = og_title['content']
 
     if not metadata['date']:
-        # Try time element with datetime attribute
         time_elem = soup.find('time', datetime=True)
         if time_elem:
             metadata['date'] = time_elem['datetime']
 
     if not metadata['author']:
-        # Try byline class/element (common pattern)
         byline = soup.find(class_=re.compile('byline|author', re.I))
         if byline:
-            # Extract text, excluding any nested time elements
             author_text = byline.get_text(strip=True)
-            # Clean up common prefixes
             author_text = re.sub(r'^(by|author):?\s*', '', author_text, flags=re.I)
             if author_text:
                 metadata['author'] = author_text
@@ -104,29 +83,20 @@ def parse_article_metadata(html: str) -> Dict[str, Optional[str]]:
     return metadata
 
 
-def parse_article_content(html: str) -> str:
+def parse_article_content(html: str = None, soup: BeautifulSoup = None) -> str:
     """
     Extract main article content (paragraphs) from HTML.
 
     Args:
-        html: Article HTML content
+        html: Article HTML content (used if soup not provided)
+        soup: Pre-parsed BeautifulSoup object
 
     Returns:
-        Article content as clean text (no HTML tags)
-        Returns empty string if no content found
-
-    Example:
-        >>> html = open('data/article_sample.html').read()
-        >>> content = parse_article_content(html)
-        >>> print(len(content))
-        2500
+        Article content as clean text
     """
-    soup = BeautifulSoup(html, 'lxml')
+    if soup is None:
+        soup = BeautifulSoup(html, 'lxml')
 
-    content_text = ""
-
-    # Strategy 1: Look for common article content containers
-    # Try multiple selectors in priority order
     content_selectors = [
         {'class': re.compile('body-copy|article-body|entry-content|post-content', re.I)},
         {'class': 'article'},
@@ -139,125 +109,82 @@ def parse_article_content(html: str) -> str:
         if content_container:
             break
 
-    # Strategy 2: If no container found, try to find article tag
     if not content_container:
         content_container = soup.find('article')
 
-    if content_container:
-        # Extract all paragraphs
-        paragraphs = content_container.find_all('p')
+    if not content_container:
+        return ""
 
-        # Clean and join paragraphs
-        clean_paragraphs = []
-        for p in paragraphs:
-            # Get text, stripping HTML tags
-            text = p.get_text(separator=' ', strip=True)
+    clean_paragraphs = []
+    for p in content_container.find_all('p'):
+        text = p.get_text(separator=' ', strip=True)
+        if len(text) < 20:
+            continue
+        lower_text = text.lower()
+        if any(skip in lower_text for skip in ['advertisement', 'sponsored', 'read more:', 'related:']):
+            continue
+        clean_paragraphs.append(text)
 
-            # Skip empty paragraphs or very short ones (likely ads/cruft)
-            if len(text) < 20:
-                continue
-
-            # Skip if looks like advertisement or related content
-            lower_text = text.lower()
-            if any(skip in lower_text for skip in ['advertisement', 'sponsored', 'read more:', 'related:']):
-                continue
-
-            clean_paragraphs.append(text)
-
-        # Join with double newlines for readability
-        content_text = '\n\n'.join(clean_paragraphs)
-
-    return content_text
+    return '\n\n'.join(clean_paragraphs)
 
 
-def parse_article_image(html: str) -> Optional[str]:
+def parse_article_image(html: str = None, soup: BeautifulSoup = None, json_ld: dict = None) -> Optional[str]:
     """
     Extract main article image URL from HTML.
 
     Args:
-        html: Article HTML content
+        html: Article HTML content (used if soup not provided)
+        soup: Pre-parsed BeautifulSoup object
+        json_ld: Pre-parsed JSON-LD data
 
     Returns:
-        Image URL as string, or None if not found
-
-    Example:
-        >>> html = open('data/article_sample.html').read()
-        >>> img_url = parse_article_image(html)
-        >>> print(img_url)
-        'https://media.pocketgamer.com/artwork/...'
+        Image URL as string, or None
     """
-    soup = BeautifulSoup(html, 'lxml')
+    if soup is None:
+        soup = BeautifulSoup(html, 'lxml')
+    if json_ld is None:
+        json_ld = _parse_json_ld(soup)
 
     image_url = None
 
-    # Strategy 1: Try JSON-LD structured data (most reliable)
-    json_ld_scripts = soup.find_all('script', type='application/ld+json')
-    for script in json_ld_scripts:
-        try:
-            data = json.loads(script.string)
+    # Strategy 1: JSON-LD
+    if json_ld and 'image' in json_ld:
+        image_data = json_ld['image']
+        if isinstance(image_data, dict) and 'url' in image_data:
+            image_url = image_data['url']
+        elif isinstance(image_data, str):
+            image_url = image_data
 
-            # JSON-LD can be an array of objects
-            if isinstance(data, list):
-                for item in data:
-                    if item.get('@type') == 'NewsArticle':
-                        data = item
-                        break
-
-            # Extract from NewsArticle structured data
-            if isinstance(data, dict) and data.get('@type') == 'NewsArticle':
-                if 'image' in data:
-                    image_data = data['image']
-                    if isinstance(image_data, dict) and 'url' in image_data:
-                        image_url = image_data['url']
-                    elif isinstance(image_data, str):
-                        image_url = image_data
-
-                    if image_url:
-                        break
-
-        except (json.JSONDecodeError, KeyError, TypeError):
-            continue
-
-    # Strategy 2: Try Open Graph meta tag
+    # Strategy 2: Open Graph
     if not image_url:
         og_image = soup.find('meta', property='og:image')
         if og_image and og_image.get('content'):
             image_url = og_image['content']
 
-    # Strategy 3: Try Twitter meta tag
+    # Strategy 3: Twitter
     if not image_url:
         twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
         if twitter_image and twitter_image.get('content'):
             image_url = twitter_image['content']
 
-    # Strategy 4: Try to find main article image (figure.lead img, article img, etc.)
+    # Strategy 4: Article image elements
     if not image_url:
-        # Look for common patterns
         img_selectors = [
             soup.find('figure', class_=re.compile('lead|hero|featured', re.I)),
             soup.find('div', class_=re.compile('article.*image|featured.*image', re.I)),
             soup.find('article')
         ]
-
         for container in img_selectors:
             if container:
                 img_tag = container.find('img')
                 if img_tag:
-                    # Try src, then data-src (lazy loading)
                     image_url = img_tag.get('src') or img_tag.get('data-src')
                     if image_url:
                         break
 
-    # Validate and normalize URL
-    if image_url:
-        # Make relative URLs absolute
-        if image_url.startswith('/'):
-            # Extract base URL from article (need to get it from somewhere)
-            # For now, return as-is - caller should handle this
-            pass
-        elif not image_url.startswith('http'):
-            # Invalid URL
-            return None
+    # Validate URL
+    if image_url and not image_url.startswith(('http', '/')):
+        return None
 
     return image_url
 
@@ -265,175 +192,47 @@ def parse_article_image(html: str) -> Optional[str]:
 def extract_full_article(html: str, url: str) -> Dict[str, Optional[str]]:
     """
     Extract complete article data from HTML.
-
-    Combines metadata, content, and image extraction into a single function.
+    Parses HTML once and shares soup + JSON-LD across all extractors.
 
     Args:
         html: Article HTML content
-        url: Source URL of the article (for tracking/deduplication)
+        url: Source URL of the article
 
     Returns:
-        Dictionary with all article fields:
-        - url: Source URL
-        - title: Article title
-        - date: Publication date (ISO format)
-        - author: Article author (or None)
-        - content: Full article text
-        - image_url: Main article image URL (or None)
-        - scraped_at: Timestamp when article was scraped (ISO format)
-
-    Example:
-        >>> html = open('data/article_sample.html').read()
-        >>> article = extract_full_article(html, 'https://example.com/article')
-        >>> print(article['title'])
-        'Nominations are now open for the 12th Pocket Gamer Awards'
+        Dictionary with all article fields
     """
-    # Extract all components
-    metadata = parse_article_metadata(html)
-    content = parse_article_content(html)
-    image_url = parse_article_image(html)
+    # Parse once, share everywhere
+    soup = BeautifulSoup(html, 'lxml')
+    json_ld = _parse_json_ld(soup)
 
-    # Build complete article dictionary
-    article = {
+    metadata = parse_article_metadata(soup=soup, json_ld=json_ld)
+    content = parse_article_content(soup=soup)
+    image_url = parse_article_image(soup=soup, json_ld=json_ld)
+
+    return {
         'url': url,
         'title': metadata.get('title'),
         'date': metadata.get('date'),
         'author': metadata.get('author'),
         'content': content if content else None,
         'image_url': image_url,
-        'scraped_at': datetime.utcnow().isoformat() + 'Z'
+        'scraped_at': datetime.now(timezone.utc).isoformat()
     }
-
-    return article
 
 
 if __name__ == '__main__':
-    """
-    Test the parser with sample article HTML.
-    """
     import sys
+    from pathlib import Path
 
     article_path = Path('data/article_sample.html')
-
     if not article_path.exists():
-        print(f"❌ Sample article not found: {article_path}")
+        print(f"Sample article not found: {article_path}")
         print("Run: python -m src.scraper")
         sys.exit(1)
 
-    print(f"Reading: {article_path}")
     html = article_path.read_text(encoding='utf-8')
-    print(f"✅ Loaded {len(html)} characters")
-    print()
+    print(f"Loaded {len(html)} characters")
 
-    print("Extracting metadata...")
-    metadata = parse_article_metadata(html)
-
-    print("=" * 60)
-    print(json.dumps(metadata, indent=2, ensure_ascii=False))
-    print("=" * 60)
-    print()
-
-    # Validate results
-    errors = []
-    if not metadata['title']:
-        errors.append("❌ Title not extracted")
-    else:
-        print(f"✅ Title: {metadata['title']}")
-
-    if not metadata['date']:
-        errors.append("❌ Date not extracted")
-    else:
-        print(f"✅ Date: {metadata['date']}")
-
-    if not metadata['author']:
-        print("⚠️  Author: None (may be missing from article)")
-    else:
-        print(f"✅ Author: {metadata['author']}")
-
-    if errors:
-        print()
-        for error in errors:
-            print(error)
-        sys.exit(1)
-    else:
-        print()
-        print("✅ All metadata extracted successfully!")
-
-    print()
-    print("=" * 60)
-    print("Extracting content...")
-    print("=" * 60)
-    print()
-
-    content = parse_article_content(html)
-
-    if not content:
-        print("❌ No content extracted")
-        sys.exit(1)
-
-    print(f"✅ Extracted {len(content)} characters of content")
-    print()
-    print("First 200 characters:")
-    print("-" * 60)
-    print(content[:200])
-    print("-" * 60)
-    print()
-
-    # Check for HTML tags (shouldn't have any)
-    if '<' in content and '>' in content:
-        print("⚠️  Warning: Content contains HTML tags")
-    else:
-        print("✅ Content is clean text (no HTML tags)")
-
-    print()
-    print("=" * 60)
-    print("Extracting image URL...")
-    print("=" * 60)
-    print()
-
-    image_url = parse_article_image(html)
-
-    if not image_url:
-        print("❌ No image URL found")
-        sys.exit(1)
-
-    print(f"✅ Image URL: {image_url}")
-    print()
-
-    # Validate URL format
-    if not image_url.startswith('http'):
-        print("⚠️  Warning: Image URL is not absolute")
-    else:
-        print("✅ Image URL is absolute")
-
-    print()
-    print("=" * 60)
-    print("Testing full article extraction...")
-    print("=" * 60)
-    print()
-
-    # Test the integrated extraction function
-    test_url = 'https://www.pocketgamer.com/news/12th-pocket-gamer-awards-nominations-open/'
-    full_article = extract_full_article(html, test_url)
-
-    print("Complete article dictionary:")
-    print("=" * 60)
-    print(json.dumps(full_article, indent=2, ensure_ascii=False))
-    print("=" * 60)
-    print()
-
-    # Validate
-    required_fields = ['url', 'title', 'scraped_at']
-    for field in required_fields:
-        if not full_article.get(field):
-            print(f"❌ Missing required field: {field}")
-            sys.exit(1)
-
-    print(f"✅ URL: {full_article['url']}")
-    print(f"✅ Title: {full_article['title']}")
-    print(f"✅ Scraped at: {full_article['scraped_at']}")
-    print(f"✅ Content length: {len(full_article['content'])} chars" if full_article['content'] else "⚠️  No content")
-    print(f"✅ Image URL present" if full_article['image_url'] else "⚠️  No image URL")
-
-    print()
-    print("✅ All parsing tests passed!")
+    test_url = 'https://www.pocketgamer.com/news/test'
+    article = extract_full_article(html, test_url)
+    print(json.dumps(article, indent=2, ensure_ascii=False))

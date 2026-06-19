@@ -1,21 +1,27 @@
 # SwipePads News Scraper - Python Dependencies
 
 # Web scraping
-requests==2.31.0
-beautifulsoup4==4.12.2
-lxml==5.1.0
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+lxml>=5.1.0
 
 # Image processing
-Pillow==10.1.0
+Pillow>=10.1.0
 
 # AI summarization
-anthropic==0.72.0
+anthropic>=0.72.0
+
+# YouTube Data API v3
+google-api-python-client>=2.108.0
+
+# Reddit API
+praw>=7.7.1
 
 # Configuration
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
 
 # Scheduling
-APScheduler==3.10.4
+APScheduler>=3.10.4
 
 # Testing
-pytest==7.4.3
+pytest>=7.4.3

@@ -1,404 +1,201 @@
 # SwipePads News Scraper
 
-Automated mobile gaming news scraper for Pocket Gamer. Collects articles, generates AI-powered scannable summaries, and exports data for integration into SwipePads mobile games launcher.
+Multi-source mobile gaming news aggregator. Scrapes websites, YouTube channels, and Reddit subreddits. Generates AI summaries, exports to JSON/XML, runs on a schedule.
+
+Built for the SwipePads mobile games launcher.
 
 ---
 
-## Project Status
+## Status: v2.0 — Multi-Source (23 March 2026)
 
-**Current Phase**: Phase 6 - AI Summarization
-**Progress**: 40/89 milestones completed (44.9%)
-**Status**: Core pipeline functional, AI integration in progress
+**89/89 original milestones complete + multi-source extension**
 
-### ✅ Completed Phases
-- **Phase 0**: Environment & Project Setup ✅
-- **Phase 1**: Single Article Scraper ✅
-- **Phase 2**: Image Download Pipeline ✅
-- **Phase 3**: SQLite Storage ✅
-- **Phase 4**: Integration - Single Article Pipeline ✅
-- **Phase 5**: Batch Scraping ✅
-- **Phase 6**: AI Summarization (1/7 milestones - API client ready)
+---
 
-### 📋 Tracking Files
-- **[PROGRESS.md](PROGRESS.md)** - Detailed progress tracker with completion notes
-- **[CURRENT_MILESTONE.md](CURRENT_MILESTONE.md)** - Current milestone: M6.2
-- **[DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)** - Complete 89-milestone plan
+## What changed today (23 March 2026)
+
+### Fixes & refactors (from code review)
+- Proper Python package structure (`pyproject.toml`, `src/__init__.py`, killed all `sys.path.insert` hacks)
+- Parser 3x faster — single BeautifulSoup + shared JSON-LD per article instead of 3 separate parses
+- Database: parameterized SQL queries, `datetime.now(timezone.utc)`, `init_db()` once per batch
+- Summarizer: configurable model via `Config.CLAUDE_MODEL`, rate limiting with exponential backoff, resettable `CostTracker`
+- Logging: single `basicConfig` in pipeline, no duplicate setup across modules
+
+### Phase 6 completed (AI Summarization)
+- `summarize_article()` with rate limiting + retry on `RateLimitError`
+- `summarize_batch()` for bulk processing with cost tracking
+- `update_article_summary()` + `get_articles_without_summary()` in database
+- Pipeline CLI: `--summarize` and `--summarize-existing` flags
+
+### Phase 7-10 completed
+- **Export** (`src/exporter.py`): JSON/XML, timestamped files, `--since`/`--limit` filtering, validation
+- **Scheduler** (`src/scheduler.py`): APScheduler daemon, scrape every 4h, auto-export, daily cleanup, health check
+- **Cleanup** (`src/cleanup.py`): retention policy, orphan image cleanup, dry-run mode
+- **Verification** (`verify.py`): full system health check
+
+### Multi-source extension (NEW)
+- `src/sources/` — collector abstraction with `BaseCollector` ABC
+- **7 websites**: pocketgamer, gamingonphone, droidgamers, toucharcade, pockettactics, addictinggames, minireview
+- **14 YouTube channels**: iFerg, RiseofMobileGames, CallOfDutyMobile, BobbyPlays, OrangeJuice, etc.
+- **3 Reddit subreddits**: r/AndroidGaming, r/MobileGaming, r/iosgaming
+- Database migrated: `source_type`, `source_name`, `content_id` columns
+- CLI: `--all`, `--source-type`, `--source`, `--list-sources`
+
+### Newsletter
+- Scraped 43 articles from live sources
+- Built HTML gaming newsletter with images and section summaries
+- Sent via Gmail to team (MT, Kamil Warulik, Mateusz Waligorski)
+
+### Tests
+- 68 tests passing (database, parser, summarizer, exporter, cleanup, sources)
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-- Python 3.11+
-- Anthropic API key (for AI summarization)
-
-### Installation
-
-1. **Clone the repository**
 ```bash
-git clone <repository-url>
-cd swipepads-scraper
-```
-
-2. **Set up virtual environment**
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install
 pip install -r requirements.txt
-```
 
-3. **Configure environment variables**
-```bash
+# Configure
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-```
+# Edit .env — add your API keys
 
-4. **Initialize database**
-```bash
-python -c "from src.database import init_db; init_db()"
-```
+# List all 24 sources
+python -m src.pipeline --list-sources
 
-### Usage
+# Scrape all website sources
+python -m src.pipeline --source-type website --limit 10
 
-**Scrape a single article:**
-```bash
-python src/pipeline.py --url "https://www.pocketgamer.com/news/article-url"
-```
+# Scrape everything (websites + YouTube + Reddit)
+python -m src.pipeline --all --limit 10
 
-**Batch scrape multiple articles:**
-```bash
-python src/pipeline.py --batch --limit 20
-```
+# Scrape + AI summarize
+python -m src.pipeline --all --limit 10 --summarize
 
-**Force re-scrape existing articles:**
-```bash
-python src/pipeline.py --batch --limit 10 --force
-```
+# Single source
+python -m src.pipeline --source gamingonphone --limit 5
 
-**Verify pipeline integrity:**
-```bash
-python src/verify_pipeline.py
-```
+# Export to JSON
+python -m src.exporter --format json --validate
 
-### Testing AI Summarization
+# Start scheduler (auto scrape every 4h)
+python -m src.scheduler --daemon
 
-**Test API connection:**
-```bash
-python -m src.summarizer
-```
+# Cleanup old articles
+python -m src.cleanup --dry-run --days 30
 
-**Generate summary for an article:**
-```python
-from src.summarizer import summarize_article
-summary = summarize_article("Article Title", "Article content text...")
-print(summary)
+# Run tests
+python -m pytest tests/ -v
+
+# System health check
+python verify.py --full
 ```
 
 ---
 
-## Features
+## API Keys needed
 
-### ✅ Implemented
-- ✅ Web scraping from Pocket Gamer news listings
-- ✅ Article content extraction (title, date, author, content, images)
-- ✅ Multi-strategy parsing (JSON-LD → Open Graph → Twitter → HTML)
-- ✅ Image download with PIL validation
-- ✅ SQLite database storage with upsert (duplicate prevention)
-- ✅ Batch processing with rate limiting (2 sec between requests)
-- ✅ Progress reporting and error recovery
-- ✅ Failed URL logging for retry
-- ✅ Comprehensive verification scripts
-- ✅ Anthropic Claude API integration
-- ✅ Cost tracking for API usage
-- ✅ CLI with flexible arguments
+| Service | Env Variable | How to get | Cost |
+|---------|-------------|-----------|------|
+| Anthropic (summaries) | `ANTHROPIC_API_KEY` | console.anthropic.com | Pay per token |
+| YouTube Data API v3 | `YOUTUBE_API_KEY` | console.cloud.google.com | Free (10k units/day) |
+| Reddit API | `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` | reddit.com/prefs/apps | Free |
 
-### 🚧 In Progress
-- 🚧 AI-powered bullet-point summaries (200-300 chars, 3-5 bullets)
-- 🚧 Summary storage in database
+Websites work without any API keys.
 
-### 📅 Planned
-- [ ] JSON/XML export for CMS integration
-- [ ] Automated scheduling (every 4 hours)
-- [ ] 30-day data retention with auto-cleanup
-- [ ] Daemon mode with health checks
+---
+
+## Architecture
+
+```
+24 sources (websites, YouTube, Reddit)
+    |
+    v
+src/sources/          — BaseCollector -> WebsiteCollector, YouTubeCollector, RedditCollector
+    |
+    v
+src/parser.py         — extract metadata, content, images (single parse)
+src/image_downloader.py — download + validate with PIL + retry
+    |
+    v
+src/summarizer.py     — Claude API with rate limiting + cost tracking
+    |
+    v
+src/database.py       — SQLite (source_type, source_name, content_id)
+    |
+    +---> src/exporter.py    — JSON/XML export with validation
+    +---> src/cleanup.py     — retention policy, orphan cleanup
+    +---> src/scheduler.py   — APScheduler daemon, 4h cycle
+    +---> src/pipeline.py    — orchestrator + CLI
+```
+
+---
+
+## TODO
+
+### High Priority
+- [ ] Fix PocketGamer scraper — 0 URLs discovered, site may have changed structure
+- [ ] Remove TouchArcade from sources — site shut down (403 on all pages)
+- [ ] Fix PocketTactics selectors — scraping category pages instead of articles
+- [ ] Fix AddictingGames — scraping game category pages, not news articles
+- [ ] Research MiniReview.io — 0 URLs found, may need JS rendering
+
+### YouTube & Reddit (need API keys)
+- [ ] Set up YouTube Data API key and test 14 channels
+- [ ] Set up Reddit API credentials and test 3 subreddits
+- [ ] Add YouTube channel handle -> ID resolution caching
+
+### Newsletter & Email
+- [ ] Build automated newsletter generation module (`src/newsletter.py`)
+- [ ] HTML email template with proper MIME encoding
+- [ ] Schedule weekly newsletter send
+- [ ] Add unsubscribe / recipient management
+
+### Content Quality
+- [ ] Filter out non-article pages (category pages, about, profiles)
+- [ ] Deduplicate similar articles across sources
+- [ ] Add article quality scoring (content length, has image, has date)
+- [ ] Improve summarizer prompt for YouTube descriptions vs articles
+
+### Phase 2 Sources (later)
+- [ ] Twitter/X API ($100/mo) — 5 accounts to monitor
+- [ ] Instagram — 3 accounts (needs business API review)
+- [ ] TikTok — 3 accounts (needs research API access)
+
+### Infrastructure
+- [ ] Add proper logging to file (rotate daily)
+- [ ] Docker container for deployment
+- [ ] GitHub Actions CI for tests
+- [ ] Dashboard / web UI for viewing scraped content
+- [ ] Webhook notifications (Slack/Discord) on new content
 
 ---
 
 ## Project Structure
 
 ```
-swipepads-scraper/
-├── docs/                          # Documentation
-│   ├── PROJECT_BRIEF.md           # Requirements specification
-│   ├── DEVELOPMENT_PLAN.md        # Complete 89-milestone plan
-│   └── phases/                    # Phase status files
-├── src/                           # Source code
-│   ├── config.py                  # Configuration & environment variables
-│   ├── scraper.py                 # Web scraping (fetch pages, parse links)
-│   ├── parser.py                  # Article parsing (metadata, content, images)
-│   ├── image_downloader.py        # Image download & validation
-│   ├── database.py                # SQLite operations (CRUD, queries)
-│   ├── summarizer.py              # AI summarization (Anthropic Claude)
-│   ├── pipeline.py                # Main pipeline orchestration
-│   └── verify_pipeline.py         # Verification & integrity checks
-├── tests/                         # Test scripts
-│   └── test_database.py           # Database unit tests (pytest)
-├── data/                          # Database & temp files (git-ignored)
-│   └── articles.db                # SQLite database
-├── images/                        # Downloaded images (git-ignored)
-│   └── YYYY-MM-DD/                # Images organized by date
-├── logs/                          # Log files (git-ignored)
-│   ├── scraper.log                # Main log file
-│   └── failed_urls.txt            # Failed scraping attempts
-├── .env                           # Environment variables (git-ignored)
-├── .env.example                   # Example environment file
-├── .gitignore                     # Git ignore rules
-├── requirements.txt               # Python dependencies
-├── README.md                      # This file
-├── PROGRESS.md                    # Progress tracker
-└── CURRENT_MILESTONE.md           # Current work pointer
+scraper/
+├── src/
+│   ├── sources/
+│   │   ├── base.py            # BaseCollector ABC
+│   │   ├── registry.py        # 24 registered sources
+│   │   ├── website.py         # 7 website collectors
+│   │   ├── youtube.py         # 14 YouTube channels
+│   │   └── reddit.py          # 3 subreddits
+│   ├── config.py              # Env vars, Config class
+│   ├── database.py            # SQLite with source columns
+│   ├── scraper.py             # HTTP fetch + link parsing
+│   ├── parser.py              # HTML -> article data
+│   ├── image_downloader.py    # PIL validation + retry
+│   ├── summarizer.py          # Claude API + cost tracking
+│   ├── pipeline.py            # Main CLI orchestrator
+│   ├── exporter.py            # JSON/XML export
+│   ├── scheduler.py           # APScheduler daemon
+│   └── cleanup.py             # Retention + orphan cleanup
+├── tests/                     # 68 pytest tests
+├── verify.py                  # System health check
+├── pyproject.toml
+├── requirements.txt
+└── .env.example
 ```
-
----
-
-## Technology Stack
-
-- **Language**: Python 3.12
-- **Web Scraping**: requests + BeautifulSoup4 + lxml
-- **Database**: SQLite with row factory for dict-like access
-- **Image Processing**: Pillow (PIL) for validation
-- **AI**: Anthropic Claude 3.5 Sonnet (via anthropic==0.72.0)
-- **Configuration**: python-dotenv
-- **Testing**: pytest
-- **Scheduling**: APScheduler (planned)
-
----
-
-## Database Schema
-
-```sql
-CREATE TABLE articles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    url TEXT UNIQUE NOT NULL,
-    title TEXT NOT NULL,
-    date TEXT,
-    author TEXT,
-    content TEXT,
-    image_path TEXT,
-    summary TEXT,                          -- AI-generated summary
-    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_url ON articles(url);
-CREATE INDEX idx_scraped_at ON articles(scraped_at);
-```
-
----
-
-## Development Approach
-
-This project follows an incremental, milestone-based development approach:
-
-- **10 Phases** covering setup through production deployment
-- **89 Granular Milestones** (15-45 minutes each)
-- **Verification at each step** - prove features work before moving on
-- **Git commits per milestone** - easy rollback and handoff
-- **Parallel development** - independent modules built simultaneously
-
-### Development Workflow
-
-**Before starting work:**
-1. Check `CURRENT_MILESTONE.md` for what's next
-2. Read milestone details in `docs/DEVELOPMENT_PLAN.md`
-3. Run verification commands to ensure previous work intact
-
-**After completing work:**
-1. Update `PROGRESS.md` with completed milestones
-2. Update `CURRENT_MILESTONE.md` to point to next milestone
-3. Commit: `git commit -m "Phase X: Milestone Y - Description"`
-4. Tag phases: `git tag phase-X-complete`
-
----
-
-## API Cost Tracking
-
-The summarizer module tracks API usage automatically:
-
-```python
-from src.summarizer import cost_tracker
-
-# After generating summaries
-print(cost_tracker)
-# Output: API Usage: 3 requests, 1800 input tokens, 300 output tokens, $0.0099 total
-
-# Get detailed cost breakdown
-stats = cost_tracker.get_cost_estimate()
-print(f"Total cost: ${stats['total_cost']:.4f}")
-```
-
-**Estimated Costs (Claude 3.5 Sonnet):**
-- Per article: ~$0.0035 (~600 input + 100 output tokens)
-- 20 articles: ~$0.07
-- 100 articles: ~$0.35
-
----
-
-## Success Criteria
-
-The MVP will be considered complete when:
-
-1. ✅ Scrapes 20+ articles per day automatically
-2. 🚧 All articles have 3-5 bullet point summaries (200-300 chars)
-3. ✅ Images downloaded and verified on disk
-4. [ ] Exports valid JSON/XML files
-5. [ ] Runs every 4 hours without intervention
-6. ✅ No duplicate articles in database (upsert by URL)
-7. [ ] Auto-cleanup of articles older than 30 days
-
-**Current Status**: 5/7 criteria implemented or in progress
-
----
-
-## Testing
-
-**Run database tests:**
-```bash
-pytest tests/test_database.py -v
-```
-
-**Verify pipeline integrity:**
-```bash
-python src/verify_pipeline.py
-```
-
-**Test scraper:**
-```bash
-python -c "from src.scraper import fetch_page, parse_article_links; \
-           html = fetch_page('https://www.pocketgamer.com/news/'); \
-           links = parse_article_links(html, limit=5); \
-           print(f'Found {len(links)} articles')"
-```
-
-**Test parser:**
-```bash
-python -c "from src.parser import extract_full_article; \
-           from src.scraper import fetch_page; \
-           html = fetch_page('https://www.pocketgamer.com/news/...'); \
-           article = extract_full_article(html, '...'); \
-           print(f'Extracted: {article[\"title\"]}')"
-```
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**1. Module import errors**
-- Ensure virtual environment is activated: `source venv/bin/activate`
-- Reinstall dependencies: `pip install -r requirements.txt`
-
-**2. Database locked**
-- Close any SQLite browser connections
-- Check for zombie Python processes: `ps aux | grep python`
-
-**3. API authentication errors**
-- Verify `ANTHROPIC_API_KEY` in `.env` file
-- Check account has credits: https://console.anthropic.com/settings/billing
-- Test connection: `python -m src.summarizer`
-
-**4. Image download failures**
-- Check internet connection
-- Verify `images/` directory has write permissions
-- Review failed URLs: `cat logs/failed_urls.txt`
-
-**5. Scraping errors (401, 403)**
-- User agent may be blocked - update in `.env`
-- Rate limiting - increase `SCRAPER_RATE_LIMIT_SECONDS`
-
----
-
-## Configuration
-
-All configuration is managed via `.env` file:
-
-```bash
-# AI API Key
-ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
-
-# Scraper Settings
-SCRAPER_USER_AGENT=SwipePadsScraper/1.0
-SCRAPER_RATE_LIMIT_SECONDS=2
-
-# Database
-DATABASE_PATH=data/articles.db
-
-# Logging
-LOG_LEVEL=INFO
-LOG_FILE=logs/scraper.log
-
-# Retention
-ARTICLE_RETENTION_DAYS=30
-```
-
----
-
-## Git Workflow
-
-**Branch naming:** `sculptor/<descriptor>`
-**Current branch:** `sculptor/smooth-elite-clam`
-
-**Commit format:**
-```
-Phase X: Milestone Y - Description
-
-Detailed changes:
-- Item 1
-- Item 2
-
-Progress: XX/89 milestones (XX.X%)
-```
-
-**Tags:**
-- `phase-0-complete` through `phase-5-complete` ✅
-- Phase 6 in progress
-
----
-
-## Contributing
-
-This is a solo/small team MVP project. Follow the development plan in order.
-
-**When continuing work:**
-1. Read `CURRENT_MILESTONE.md` - shows M6.2 (Summarization Prompt Engineering)
-2. Check `PROGRESS.md` - shows 40/89 (44.9%) complete
-3. Review git status and recent commits
-4. Continue from current milestone
-
-**All commits include:**
-```
-Co-Authored-By: Claude <noreply@anthropic.com>
-Co-authored-by: Sculptor <sculptor@imbue.com>
-```
-
----
-
-## License
-
-Proprietary - SwipePads Commercial Project
-
----
-
-## Contact
-
-For questions about this project, refer to:
-- Project requirements: `docs/PROJECT_BRIEF.md`
-- Development plan: `docs/DEVELOPMENT_PLAN.md`
-- Progress tracker: `PROGRESS.md`
-
----
-
-**Last Updated**: 2025-11-03
-**Version**: 0.5.0 (Phases 0-5 Complete, Phase 6 In Progress)
-**Next Milestone**: M6.2 - Summarization Prompt Engineering

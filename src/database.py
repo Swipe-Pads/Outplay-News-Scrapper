@@ -5,7 +5,7 @@ SQLite database module for article storage.
 import sqlite3
 from pathlib import Path
 from typing import Optional, List, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class DatabaseError(Exception):
@@ -41,6 +41,9 @@ def init_db(db_path: str = "data/articles.db") -> None:
                     content TEXT,
                     image_path TEXT,
                     summary TEXT,
+                    source_type TEXT DEFAULT 'website',
+                    source_name TEXT DEFAULT 'pocketgamer',
+                    content_id TEXT,
                     scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -48,6 +51,21 @@ def init_db(db_path: str = "data/articles.db") -> None:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_url ON articles(url)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_scraped_at ON articles(scraped_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_source_type ON articles(source_type)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_source_name ON articles(source_name)")
+
+            # Migrate existing tables — add new columns if missing
+            cursor = conn.execute("PRAGMA table_info(articles)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if 'source_type' not in columns:
+                conn.execute("ALTER TABLE articles ADD COLUMN source_type TEXT DEFAULT 'website'")
+            if 'source_name' not in columns:
+                conn.execute("ALTER TABLE articles ADD COLUMN source_name TEXT DEFAULT 'pocketgamer'")
+            if 'content_id' not in columns:
+                conn.execute("ALTER TABLE articles ADD COLUMN content_id TEXT")
+            if 'strapi_id' not in columns:
+                conn.execute("ALTER TABLE articles ADD COLUMN strapi_id INTEGER")
+
             conn.commit()
     except sqlite3.Error as e:
         raise DatabaseError(f"Database initialization failed: {e}") from e
@@ -63,11 +81,12 @@ def insert_article(article: dict, db_path: str = "data/articles.db") -> int:
             conn.execute("PRAGMA foreign_keys = ON")
             cursor = conn.cursor()
 
-            # Upsert using SQLite's ON CONFLICT syntax
             cursor.execute(
                 """
-                INSERT INTO articles (url, title, date, author, content, image_path, summary, updated_at)
-                VALUES (:url, :title, :date, :author, :content, :image_path, :summary, CURRENT_TIMESTAMP)
+                INSERT INTO articles (url, title, date, author, content, image_path, summary,
+                                      source_type, source_name, content_id, updated_at)
+                VALUES (:url, :title, :date, :author, :content, :image_path, :summary,
+                        :source_type, :source_name, :content_id, CURRENT_TIMESTAMP)
                 ON CONFLICT(url) DO UPDATE SET
                     title=excluded.title,
                     date=excluded.date,
@@ -75,6 +94,9 @@ def insert_article(article: dict, db_path: str = "data/articles.db") -> int:
                     content=excluded.content,
                     image_path=excluded.image_path,
                     summary=excluded.summary,
+                    source_type=excluded.source_type,
+                    source_name=excluded.source_name,
+                    content_id=excluded.content_id,
                     updated_at=CURRENT_TIMESTAMP
                 """,
                 {
@@ -85,11 +107,13 @@ def insert_article(article: dict, db_path: str = "data/articles.db") -> int:
                     "content": article.get("content"),
                     "image_path": article.get("image_path"),
                     "summary": article.get("summary"),
+                    "source_type": article.get("source_type", "website"),
+                    "source_name": article.get("source_name", "unknown"),
+                    "content_id": article.get("content_id"),
                 },
             )
             conn.commit()
 
-            # Return the article ID
             cursor.execute("SELECT id FROM articles WHERE url = ?", (article["url"],))
             row = cursor.fetchone()
             return row["id"] if row else None
@@ -113,19 +137,79 @@ def get_all_articles(limit: int = None, db_path: str = "data/articles.db") -> Li
     """Get all articles, newest first."""
     try:
         with _get_connection(db_path) as conn:
-            query = "SELECT * FROM articles ORDER BY scraped_at DESC"
             if limit:
-                query += f" LIMIT {int(limit)}"
-            cursor = conn.execute(query)
+                cursor = conn.execute(
+                    "SELECT * FROM articles ORDER BY scraped_at DESC LIMIT ?",
+                    (int(limit),)
+                )
+            else:
+                cursor = conn.execute("SELECT * FROM articles ORDER BY scraped_at DESC")
             return [dict(row) for row in cursor.fetchall()]
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed to retrieve all articles: {e}") from e
 
 
+def get_articles_by_source(
+    source_type: str = None, source_name: str = None,
+    limit: int = None, db_path: str = "data/articles.db"
+) -> List[dict]:
+    """Get articles filtered by source_type and/or source_name."""
+    try:
+        with _get_connection(db_path) as conn:
+            query = "SELECT * FROM articles WHERE 1=1"
+            params = []
+            if source_type:
+                query += " AND source_type = ?"
+                params.append(source_type)
+            if source_name:
+                query += " AND source_name = ?"
+                params.append(source_name)
+            query += " ORDER BY scraped_at DESC"
+            if limit:
+                query += " LIMIT ?"
+                params.append(int(limit))
+            cursor = conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to retrieve articles by source: {e}") from e
+
+
+def get_articles_without_summary(limit: int = None, db_path: str = "data/articles.db") -> List[dict]:
+    """Get articles that don't have a summary yet."""
+    try:
+        with _get_connection(db_path) as conn:
+            if limit:
+                cursor = conn.execute(
+                    "SELECT * FROM articles WHERE summary IS NULL AND content IS NOT NULL ORDER BY scraped_at DESC LIMIT ?",
+                    (int(limit),)
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM articles WHERE summary IS NULL AND content IS NOT NULL ORDER BY scraped_at DESC"
+                )
+            return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to retrieve unsummarized articles: {e}") from e
+
+
+def update_article_summary(url: str, summary: str, db_path: str = "data/articles.db") -> bool:
+    """Update the summary field for an article."""
+    try:
+        with _get_connection(db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE articles SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE url = ?",
+                (summary, url)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to update article summary: {e}") from e
+
+
 def get_recent_articles(days: int = 30, db_path: str = "data/articles.db") -> List[dict]:
     """Get articles from last N days."""
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         with _get_connection(db_path) as conn:
             cursor = conn.execute(
                 "SELECT * FROM articles WHERE scraped_at >= ? ORDER BY scraped_at DESC",
@@ -136,10 +220,24 @@ def get_recent_articles(days: int = 30, db_path: str = "data/articles.db") -> Li
         raise DatabaseError(f"Failed to get recent articles: {e}") from e
 
 
+def get_old_articles(days: int = 30, db_path: str = "data/articles.db") -> List[dict]:
+    """Get articles older than N days."""
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        with _get_connection(db_path) as conn:
+            cursor = conn.execute(
+                "SELECT * FROM articles WHERE scraped_at < ? ORDER BY scraped_at ASC",
+                (cutoff.isoformat(),),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to get old articles: {e}") from e
+
+
 def delete_old_articles(days: int = 30, db_path: str = "data/articles.db") -> int:
     """Delete articles older than N days, return count deleted."""
     try:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         with _get_connection(db_path) as conn:
             cursor = conn.execute("DELETE FROM articles WHERE scraped_at < ?", (cutoff.isoformat(),))
             conn.commit()
@@ -159,6 +257,35 @@ def get_article_count(db_path: str = "data/articles.db") -> int:
         raise DatabaseError(f"Failed to count articles: {e}") from e
 
 
+def get_articles_not_synced(limit: int = None, db_path: str = "data/articles.db") -> List[dict]:
+    """Get articles that haven't been synced to Strapi (strapi_id IS NULL)."""
+    try:
+        with _get_connection(db_path) as conn:
+            query = "SELECT * FROM articles WHERE strapi_id IS NULL ORDER BY scraped_at DESC"
+            if limit:
+                query += " LIMIT ?"
+                cursor = conn.execute(query, (int(limit),))
+            else:
+                cursor = conn.execute(query)
+            return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to get unsynced articles: {e}") from e
+
+
+def update_article_strapi_id(article_id: int, strapi_id: int, db_path: str = "data/articles.db") -> bool:
+    """Set the strapi_id for a local article after successful sync."""
+    try:
+        with _get_connection(db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE articles SET strapi_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (strapi_id, article_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to update strapi_id: {e}") from e
+
+
 def article_exists(url: str, db_path: str = "data/articles.db") -> bool:
     """Check if article URL exists."""
     try:
@@ -170,9 +297,6 @@ def article_exists(url: str, db_path: str = "data/articles.db") -> bool:
 
 
 if __name__ == "__main__":
-    """
-    Test/demo of database functions.
-    """
     print("Initializing database...")
     init_db()
 
@@ -187,21 +311,13 @@ if __name__ == "__main__":
 
     print("Inserting test article...")
     article_id = insert_article(test_article)
-    print(f"✅ Inserted article ID: {article_id}")
+    print(f"Inserted article ID: {article_id}")
 
     print("\nRetrieving article by URL...")
     retrieved = get_article_by_url(test_article["url"])
-    print(f"✅ Retrieved: {retrieved['title']}")
+    print(f"Retrieved: {retrieved['title']}")
 
     count = get_article_count()
-    print(f"✅ Total articles: {count}")
+    print(f"Total articles: {count}")
 
-    print("\nTesting upsert (updating existing article)...")
-    test_article["title"] = "Updated Test Article"
-    updated_id = insert_article(test_article)
-    print(f"✅ Updated article ID: {updated_id} (should be same as {article_id})")
-
-    new_count = get_article_count()
-    print(f"✅ Article count after update: {new_count} (should still be {count})")
-
-    print("\n✅ All database tests passed!")
+    print("\nAll database tests passed!")

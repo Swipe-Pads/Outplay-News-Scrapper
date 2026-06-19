@@ -32,6 +32,25 @@ class Config:
     USER_AGENT = os.getenv('SCRAPER_USER_AGENT', 'SwipePadsScraper/1.0')
     RATE_LIMIT_SECONDS = int(os.getenv('SCRAPER_RATE_LIMIT_SECONDS', '2'))
 
+    # AI Settings
+    CLAUDE_MODEL = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-20250514')
+    API_RATE_LIMIT_SECONDS = float(os.getenv('API_RATE_LIMIT_SECONDS', '1.0'))
+
+    # YouTube API
+    YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '')
+    YOUTUBE_MAX_RESULTS = int(os.getenv('YOUTUBE_MAX_RESULTS', '10'))
+
+    # Reddit API
+    REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID', '')
+    REDDIT_CLIENT_SECRET = os.getenv('REDDIT_CLIENT_SECRET', '')
+    REDDIT_USER_AGENT = os.getenv('REDDIT_USER_AGENT', 'OutplayNewsScraper/1.0')
+    REDDIT_MIN_SCORE = int(os.getenv('REDDIT_MIN_SCORE', '5'))
+
+    # Strapi CMS
+    STRAPI_URL = os.getenv('STRAPI_URL', 'http://localhost:1337')
+    STRAPI_API_TOKEN = os.getenv('STRAPI_API_TOKEN', '')
+    STRAPI_PUBLISH = os.getenv('STRAPI_PUBLISH', 'false').lower() == 'true'
+
     # Database
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/articles.db')
 

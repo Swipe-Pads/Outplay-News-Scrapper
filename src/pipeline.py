@@ -1,7 +1,8 @@
 """
 End-to-end article processing pipeline.
 
-Orchestrates: scraping → parsing → image download → database storage
+Orchestrates: source discovery -> collection -> image download -> summarization -> database storage
+Supports multiple source types: websites, YouTube, Reddit.
 """
 
 import sys
@@ -12,17 +13,21 @@ from pathlib import Path
 from typing import Optional, Dict, List
 from datetime import datetime
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from src.scraper import fetch_page, parse_article_links
 from src.parser import extract_full_article
 from src.image_downloader import download_image, ImageDownloadError
-from src.database import init_db, insert_article, article_exists, DatabaseError
+from src.database import (
+    init_db, insert_article, article_exists, get_articles_without_summary,
+    update_article_summary, get_article_count, DatabaseError
+)
+from src.summarizer import (
+    summarize_article, summarize_batch, cost_tracker,
+    SummarizationError, APIKeyError
+)
 from src.config import Config
 
 
-# Configure logging
+# Configure logging once for the whole application
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -31,330 +36,409 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def process_single_article(url: str, skip_existing: bool = True) -> Optional[Dict]:
+def process_collected_item(
+    item_dict: dict,
+    summarize: bool = False,
+    db_path: str = None
+) -> Optional[Dict]:
     """
-    Process a single article through the complete pipeline.
-
-    Steps:
-    1. Check if article already exists (optional skip)
-    2. Fetch article HTML
-    3. Extract all metadata, content, and image URL
-    4. Download and validate article image
-    5. Store article in database with image path
+    Process a pre-collected item through image download + summarize + store.
 
     Args:
-        url: Article URL to process
-        skip_existing: If True, skip articles that already exist in DB
+        item_dict: Dict with url, title, date, author, content, image_url,
+                   source_type, source_name, content_id
+        summarize: Generate AI summary
+        db_path: Database path
 
     Returns:
-        Article dictionary with all fields, or None if failed/skipped
-
-    Raises:
-        Exception: Re-raises any unhandled exceptions for caller to handle
+        Stored article dict or None
     """
-    logger.info(f"Processing article: {url}")
+    if db_path is None:
+        db_path = str(Config.DATABASE_FULL_PATH)
 
-    # Step 0: Initialize database if needed
+    url = item_dict.get('url')
+    title = item_dict.get('title', 'Untitled')
+
+    # Check existence
     try:
-        init_db()
-    except DatabaseError as e:
-        logger.error(f"Database initialization failed: {e}")
-        raise
+        if article_exists(url, db_path):
+            logger.debug(f"Already exists: {url}")
+            return None
+    except DatabaseError:
+        pass
 
-    # Step 1: Check if article already exists
-    if skip_existing:
-        try:
-            if article_exists(url):
-                logger.info(f"Article already exists, skipping: {url}")
-                return None
-        except DatabaseError as e:
-            logger.warning(f"Could not check if article exists: {e}")
-            # Continue anyway
-
-    # Step 2: Fetch article HTML
-    try:
-        logger.info("Fetching article HTML...")
-        html = fetch_page(url)
-        logger.info(f"Fetched {len(html)} characters of HTML")
-    except Exception as e:
-        logger.error(f"Failed to fetch article: {e}")
-        raise
-
-    # Step 3: Extract article data
-    try:
-        logger.info("Extracting article data...")
-        article = extract_full_article(html, url)
-
-        # Validate required fields
-        if not article.get('title'):
-            raise ValueError("Article title is missing")
-
-        logger.info(f"Extracted: {article['title']}")
-        logger.info(f"  - Author: {article.get('author', 'Unknown')}")
-        logger.info(f"  - Date: {article.get('date', 'Unknown')}")
-        logger.info(f"  - Content: {len(article.get('content', ''))} chars")
-        logger.info(f"  - Image URL: {article.get('image_url', 'None')}")
-    except Exception as e:
-        logger.error(f"Failed to extract article data: {e}")
-        raise
-
-    # Step 4: Download article image
+    # Download image
     image_path = None
-    if article.get('image_url'):
+    if item_dict.get('image_url'):
         try:
-            logger.info(f"Downloading image: {article['image_url']}")
-            image_path = download_image(article['image_url'])
-            logger.info(f"Image saved to: {image_path}")
-            article['image_path'] = image_path
+            image_path = download_image(item_dict['image_url'])
         except ImageDownloadError as e:
-            logger.warning(f"Image download failed: {e}")
-            # Continue without image - not critical
-            article['image_path'] = None
+            logger.debug(f"Image download failed: {e}")
         except Exception as e:
-            logger.warning(f"Unexpected error downloading image: {e}")
-            article['image_path'] = None
-    else:
-        logger.info("No image URL found, skipping image download")
-        article['image_path'] = None
+            logger.warning(f"Unexpected image download error: {e}")
 
-    # Step 5: Store in database
-    try:
-        logger.info("Storing article in database...")
-        article_id = insert_article(article)
-        logger.info(f"Article stored with ID: {article_id}")
-        article['id'] = article_id
-    except DatabaseError as e:
-        logger.error(f"Failed to store article: {e}")
-        # Clean up downloaded image if DB insert failed
-        if image_path:
-            try:
-                Path(image_path).unlink(missing_ok=True)
-                logger.info("Cleaned up image after DB failure")
-            except Exception:
-                pass
-        raise
-
-    logger.info(f"✅ Successfully processed article: {article['title']}")
-    return article
-
-
-def get_article_urls_from_listing(limit: int = 20) -> List[str]:
-    """
-    Get article URLs from the Pocket Gamer news listing page.
-
-    Args:
-        limit: Maximum number of URLs to return
-
-    Returns:
-        List of article URLs (unique)
-    """
-    logger.info(f"Fetching article listing (limit: {limit})...")
-
-    news_url = 'https://www.pocketgamer.com/news/'
-
-    try:
-        html = fetch_page(news_url)
-        urls = parse_article_links(html, limit=limit)
-        logger.info(f"Found {len(urls)} article URLs")
-        return urls
-    except Exception as e:
-        logger.error(f"Failed to fetch article listing: {e}")
-        raise
-
-
-def process_batch(
-    urls: List[str],
-    rate_limit: float = None,
-    skip_existing: bool = True
-) -> Dict[str, any]:
-    """
-    Process multiple articles in batch.
-
-    Args:
-        urls: List of article URLs to process
-        rate_limit: Seconds to wait between requests (default: from config)
-        skip_existing: If True, skip articles that already exist
-
-    Returns:
-        Dictionary with batch statistics:
-        - total: Total URLs processed
-        - success: Successfully processed
-        - skipped: Skipped (already exist)
-        - failed: Failed to process
-        - failed_urls: List of URLs that failed
-    """
-    if rate_limit is None:
-        rate_limit = Config.RATE_LIMIT_SECONDS
-
-    stats = {
-        'total': len(urls),
-        'success': 0,
-        'skipped': 0,
-        'failed': 0,
-        'failed_urls': []
+    # Build article dict for DB
+    article = {
+        'url': url,
+        'title': title,
+        'date': item_dict.get('date'),
+        'author': item_dict.get('author'),
+        'content': item_dict.get('content'),
+        'image_path': image_path,
+        'source_type': item_dict.get('source_type', 'website'),
+        'source_name': item_dict.get('source_name', 'unknown'),
+        'content_id': item_dict.get('content_id'),
     }
 
+    # Summarize
+    if summarize and article.get('content'):
+        try:
+            summary = summarize_article(title, article['content'])
+            article['summary'] = summary
+        except (SummarizationError, APIKeyError) as e:
+            logger.warning(f"Summarization failed: {e}")
+
+    # Store
+    try:
+        article_id = insert_article(article, db_path)
+        article['id'] = article_id
+        logger.info(f"Stored: [{article['source_type']}:{article['source_name']}] {title[:60]}")
+        return article
+    except DatabaseError as e:
+        logger.error(f"Failed to store: {e}")
+        if image_path:
+            Path(image_path).unlink(missing_ok=True)
+        return None
+
+
+def scrape_all_sources(
+    source_type: str = None,
+    source_name: str = None,
+    limit: int = 10,
+    summarize: bool = False,
+    rate_limit: float = None,
+    db_path: str = None
+) -> Dict[str, any]:
+    """
+    Run all registered sources (or filtered subset).
+
+    Args:
+        source_type: Filter by "website", "youtube", "reddit"
+        source_name: Filter by specific source name
+        limit: Max items per source
+        summarize: Generate AI summaries
+        rate_limit: Seconds between requests
+        db_path: Database path
+
+    Returns:
+        Aggregate stats
+    """
+    from src.sources.registry import get_sources
+
+    if rate_limit is None:
+        rate_limit = Config.RATE_LIMIT_SECONDS
+    if db_path is None:
+        db_path = str(Config.DATABASE_FULL_PATH)
+
+    init_db(db_path)
+
+    sources = get_sources(source_type=source_type, source_name=source_name)
+    if not sources:
+        logger.warning("No sources match the filter")
+        return {'total': 0, 'success': 0, 'skipped': 0, 'failed': 0}
+
+    stats = {'total': 0, 'success': 0, 'skipped': 0, 'failed': 0, 'by_source': {}}
+
     logger.info("=" * 60)
-    logger.info(f"BATCH PROCESSING: {stats['total']} articles")
-    logger.info(f"Rate limit: {rate_limit} seconds between requests")
+    logger.info(f"MULTI-SOURCE SCRAPE: {len(sources)} sources, limit {limit}/source")
     logger.info("=" * 60)
 
     start_time = time.time()
 
-    for idx, url in enumerate(urls, 1):
-        logger.info(f"\n[{idx}/{stats['total']}] Processing: {url}")
+    for source in sources:
+        source_key = f"{source.source_type}:{source.source_name}"
+        source_stats = {'success': 0, 'skipped': 0, 'failed': 0}
+
+        logger.info(f"\n--- [{source_key}] ---")
 
         try:
-            result = process_single_article(url, skip_existing=skip_existing)
-
-            if result is None:
-                stats['skipped'] += 1
-                logger.info(f"[{idx}/{stats['total']}] Skipped (already exists)")
-            else:
-                stats['success'] += 1
-                logger.info(f"[{idx}/{stats['total']}] ✅ Success: {result['title'][:50]}...")
-
-        except KeyboardInterrupt:
-            logger.info("\nBatch processing interrupted by user")
-            break
-
+            identifiers = source.discover(limit=limit)
         except Exception as e:
+            logger.error(f"[{source_key}] Discovery failed: {e}")
             stats['failed'] += 1
-            stats['failed_urls'].append(url)
-            logger.error(f"[{idx}/{stats['total']}] ❌ Failed: {e}")
-            # Continue processing remaining articles
+            continue
 
-        # Rate limiting (skip after last item)
-        if idx < stats['total'] and rate_limit > 0:
-            logger.debug(f"Rate limiting: waiting {rate_limit} seconds...")
-            time.sleep(rate_limit)
+        for identifier in identifiers:
+            stats['total'] += 1
+
+            try:
+                # Check if already exists before collecting (saves API calls)
+                if article_exists(identifier, db_path):
+                    stats['skipped'] += 1
+                    source_stats['skipped'] += 1
+                    continue
+            except DatabaseError:
+                pass
+
+            try:
+                item = source.collect(identifier)
+                if item is None:
+                    stats['failed'] += 1
+                    source_stats['failed'] += 1
+                    continue
+
+                result = process_collected_item(
+                    item.to_dict(), summarize=summarize, db_path=db_path
+                )
+
+                if result is None:
+                    stats['skipped'] += 1
+                    source_stats['skipped'] += 1
+                else:
+                    stats['success'] += 1
+                    source_stats['success'] += 1
+
+            except KeyboardInterrupt:
+                logger.info("Interrupted by user")
+                break
+            except Exception as e:
+                stats['failed'] += 1
+                source_stats['failed'] += 1
+                logger.error(f"[{source_key}] Error: {e}")
+
+            # Rate limit
+            if rate_limit > 0:
+                time.sleep(rate_limit)
+
+        stats['by_source'][source_key] = source_stats
 
     elapsed = time.time() - start_time
     logger.info("\n" + "=" * 60)
-    logger.info("BATCH PROCESSING COMPLETE")
-    logger.info("=" * 60)
-    logger.info(f"Total processed: {stats['total']}")
-    logger.info(f"✅ Success: {stats['success']}")
-    logger.info(f"⏭️  Skipped: {stats['skipped']}")
-    logger.info(f"❌ Failed: {stats['failed']}")
-    logger.info(f"Time elapsed: {elapsed:.1f} seconds")
+    logger.info("MULTI-SOURCE SCRAPE COMPLETE")
+    logger.info(f"Sources: {len(sources)} | Items: {stats['total']} | "
+                f"New: {stats['success']} | Skipped: {stats['skipped']} | "
+                f"Failed: {stats['failed']} | Time: {elapsed:.1f}s")
 
-    if stats['failed_urls']:
-        logger.info("\nFailed URLs:")
-        for url in stats['failed_urls']:
-            logger.info(f"  - {url}")
-
-        # Save failed URLs to file
-        failed_log = Path('logs/failed_urls.txt')
-        failed_log.parent.mkdir(parents=True, exist_ok=True)
-        with open(failed_log, 'a') as f:
-            f.write(f"\n# Batch run: {datetime.now().isoformat()}\n")
-            for url in stats['failed_urls']:
-                f.write(f"{url}\n")
-        logger.info(f"\nFailed URLs saved to: {failed_log}")
-
-    logger.info("=" * 60)
+    if summarize:
+        logger.info(f"API cost: {cost_tracker}")
 
     return stats
 
 
+# --- Legacy functions (backward compatibility) ---
+
+def process_single_article(
+    url: str,
+    skip_existing: bool = True,
+    summarize: bool = False,
+    db_path: str = None
+) -> Optional[Dict]:
+    """Process a single article URL through the complete pipeline."""
+    if db_path is None:
+        db_path = str(Config.DATABASE_FULL_PATH)
+
+    if skip_existing:
+        try:
+            if article_exists(url, db_path):
+                return None
+        except DatabaseError:
+            pass
+
+    try:
+        html = fetch_page(url)
+        article = extract_full_article(html, url)
+        if not article.get('title'):
+            raise ValueError("Article title is missing")
+    except Exception as e:
+        logger.error(f"Failed to fetch/parse: {e}")
+        raise
+
+    article['source_type'] = 'website'
+    article['source_name'] = 'manual'
+
+    # Image download
+    if article.get('image_url'):
+        try:
+            article['image_path'] = download_image(article['image_url'])
+        except ImageDownloadError as e:
+            logger.debug(f"Image download failed for {url}: {e}")
+            article['image_path'] = None
+        except Exception as e:
+            logger.warning(f"Unexpected image download error for {url}: {e}")
+            article['image_path'] = None
+    else:
+        article['image_path'] = None
+
+    # Summarize
+    if summarize and article.get('content'):
+        try:
+            article['summary'] = summarize_article(article['title'], article['content'])
+        except (SummarizationError, APIKeyError) as e:
+            logger.warning(f"Summarization failed for {url}: {e}")
+            article['summary'] = None
+
+    # Store
+    try:
+        article_id = insert_article(article, db_path)
+        article['id'] = article_id
+    except DatabaseError as e:
+        logger.error(f"DB error: {e}")
+        raise
+
+    return article
+
+
+def get_article_urls_from_listing(limit: int = 20) -> List[str]:
+    """Get article URLs from Pocket Gamer (legacy)."""
+    html = fetch_page('https://www.pocketgamer.com/news/')
+    return parse_article_links(html, limit=limit)
+
+
+def process_batch(urls, rate_limit=None, skip_existing=True, summarize=False, db_path=None):
+    """Process multiple URLs (legacy)."""
+    if rate_limit is None:
+        rate_limit = Config.RATE_LIMIT_SECONDS
+    if db_path is None:
+        db_path = str(Config.DATABASE_FULL_PATH)
+
+    init_db(db_path)
+    stats = {'total': len(urls), 'success': 0, 'skipped': 0, 'failed': 0, 'failed_urls': []}
+
+    for idx, url in enumerate(urls, 1):
+        try:
+            result = process_single_article(url, skip_existing=skip_existing,
+                                            summarize=summarize, db_path=db_path)
+            if result is None:
+                stats['skipped'] += 1
+            else:
+                stats['success'] += 1
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            stats['failed'] += 1
+            stats['failed_urls'].append(url)
+            logger.error(f"[{idx}/{stats['total']}] Failed: {e}")
+
+        if idx < stats['total'] and rate_limit > 0:
+            time.sleep(rate_limit)
+
+    return stats
+
+
+def summarize_unsummarized(limit=None, db_path=None):
+    """Summarize articles that lack summaries."""
+    if db_path is None:
+        db_path = str(Config.DATABASE_FULL_PATH)
+    init_db(db_path)
+    articles = get_articles_without_summary(limit=limit, db_path=db_path)
+    if not articles:
+        return {'total': 0, 'success': 0, 'failed': 0, 'skipped': 0}
+    return summarize_batch(articles, db_path=db_path)
+
+
 def main():
-    """CLI entry point for processing articles."""
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description='Process articles through the complete pipeline'
+        description='SwipePads News Scraper — multi-source gaming news aggregator'
     )
-    parser.add_argument(
-        '--url',
-        help='Single article URL to process'
-    )
-    parser.add_argument(
-        '--batch',
-        action='store_true',
-        help='Batch mode: scrape multiple articles from listing'
-    )
-    parser.add_argument(
-        '--limit',
-        type=int,
-        default=20,
-        help='Number of articles to scrape in batch mode (default: 20)'
-    )
-    parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Process even if article already exists'
-    )
-    parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Enable verbose logging (DEBUG level)'
-    )
+
+    # Source selection
+    parser.add_argument('--all', action='store_true',
+                        help='Scrape all registered sources')
+    parser.add_argument('--source-type', choices=['website', 'youtube', 'reddit'],
+                        help='Filter by source type')
+    parser.add_argument('--source', help='Filter by specific source name')
+    parser.add_argument('--list-sources', action='store_true',
+                        help='List all registered sources and exit')
+
+    # Legacy single-source mode
+    parser.add_argument('--url', help='Single article URL to process')
+    parser.add_argument('--batch', action='store_true',
+                        help='Legacy: scrape Pocket Gamer listing')
+
+    # Common options
+    parser.add_argument('--limit', type=int, default=10,
+                        help='Items per source (default: 10)')
+    parser.add_argument('--force', action='store_true',
+                        help='Process even if already exists')
+    parser.add_argument('--summarize', action='store_true',
+                        help='Generate AI summaries')
+    parser.add_argument('--summarize-existing', action='store_true',
+                        help='Summarize existing articles that lack summaries')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Enable DEBUG logging')
 
     args = parser.parse_args()
-
-    # Validate arguments
-    if not args.batch and not args.url:
-        parser.error("Either --url or --batch is required")
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    db_path = str(Config.DATABASE_FULL_PATH)
+
+    # List sources
+    if args.list_sources:
+        from src.sources.registry import list_sources
+        sources = list_sources()
+        print(f"\nRegistered sources ({len(sources)}):\n")
+        for s in sources:
+            print(f"  [{s['type']:8s}] {s['name']}")
+        print()
+        sys.exit(0)
+
+    # Validate args
+    if not any([args.all, args.source_type, args.source, args.url, args.batch, args.summarize_existing]):
+        parser.error("Use --all, --source-type, --source, --url, --batch, or --summarize-existing")
+
     try:
-        if args.batch:
-            # Batch mode: get URLs from listing and process all
-            urls = get_article_urls_from_listing(limit=args.limit)
+        init_db(db_path)
 
-            if not urls:
-                print("⚠️  No articles found to process")
-                sys.exit(0)
-
-            stats = process_batch(urls, skip_existing=not args.force)
-
-            # Print summary
-            print("\n" + "=" * 60)
-            if stats['failed'] == 0:
-                print("✅ BATCH COMPLETE")
-            else:
-                print("⚠️  BATCH COMPLETE (with errors)")
-            print("=" * 60)
-            print(f"Total: {stats['total']}")
-            print(f"Success: {stats['success']}")
-            print(f"Skipped: {stats['skipped']}")
-            print(f"Failed: {stats['failed']}")
-            print("=" * 60)
-
+        # Multi-source mode
+        if args.all or args.source_type or args.source:
+            stats = scrape_all_sources(
+                source_type=args.source_type,
+                source_name=args.source,
+                limit=args.limit,
+                summarize=args.summarize,
+                db_path=db_path
+            )
+            print(f"\nDone: {stats['success']} new, {stats['skipped']} skipped, "
+                  f"{stats['failed']} failed")
+            if args.summarize:
+                print(f"API cost: {cost_tracker}")
             sys.exit(0 if stats['failed'] == 0 else 1)
 
-        else:
-            # Single article mode
-            result = process_single_article(
-                args.url,
-                skip_existing=not args.force
-            )
+        # Summarize existing
+        elif args.summarize_existing:
+            stats = summarize_unsummarized(limit=args.limit, db_path=db_path)
+            print(f"\nSummarized: {stats['success']} done, {stats['failed']} failed")
+            sys.exit(0)
 
+        # Legacy batch (Pocket Gamer only)
+        elif args.batch:
+            urls = get_article_urls_from_listing(limit=args.limit)
+            if not urls:
+                print("No articles found")
+                sys.exit(0)
+            stats = process_batch(urls, skip_existing=not args.force,
+                                  summarize=args.summarize, db_path=db_path)
+            print(f"\nBatch: {stats['success']} success, {stats['skipped']} skipped, "
+                  f"{stats['failed']} failed")
+            sys.exit(0)
+
+        # Single URL
+        else:
+            result = process_single_article(args.url, skip_existing=not args.force,
+                                            summarize=args.summarize, db_path=db_path)
             if result:
-                print("\n" + "=" * 60)
-                print("✅ PIPELINE SUCCESS")
-                print("=" * 60)
-                print(f"Article ID: {result.get('id')}")
-                print(f"Title: {result['title']}")
-                print(f"URL: {result['url']}")
-                print(f"Image: {result.get('image_path', 'No image')}")
-                print("=" * 60)
-                sys.exit(0)
+                print(f"\nSuccess: {result['title']}")
             else:
-                print("\n⚠️  Article skipped (already exists)")
-                sys.exit(0)
+                print("Skipped (already exists)")
+            sys.exit(0)
 
     except KeyboardInterrupt:
-        logger.info("Pipeline interrupted by user")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
-        print("\n" + "=" * 60)
-        print("❌ PIPELINE FAILED")
-        print("=" * 60)
-        print(f"Error: {e}")
-        print("=" * 60)
         sys.exit(1)
 
 

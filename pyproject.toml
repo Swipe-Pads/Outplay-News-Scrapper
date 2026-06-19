@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "swipepads-scraper"
+version = "0.6.0"
+description = "Automated mobile gaming news scraper for Pocket Gamer"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.2",
+    "lxml>=5.1.0",
+    "Pillow>=10.1.0",
+    "anthropic>=0.72.0",
+    "python-dotenv>=1.0.0",
+    "APScheduler>=3.10.4",
+    "defusedxml>=0.7.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4.3"]
+
+[project.scripts]
+scraper = "src.pipeline:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

@@ -68,3 +68,6 @@ htmlcov/
 
 # Process ID files
 *.pid
+
+.semgrep-results/
+semgrep-results/

@@ -5,13 +5,9 @@ Run with: pytest -v
 
 import os
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
-import sys
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src import database
 
@@ -71,7 +67,7 @@ def test_article_exists(temp_db):
 
 def test_get_all_and_recent_articles(temp_db):
     # Insert several articles
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     articles = [
         {"url": f"https://example.com/{i}", "title": f"Article {i}"} for i in range(5)
     ]
@@ -106,7 +102,7 @@ def test_delete_old_articles(temp_db):
     with database._get_connection(temp_db) as conn:
         conn.execute(
             "UPDATE articles SET scraped_at = ? WHERE url = ?",
-            ((datetime.utcnow() - timedelta(days=40)).isoformat(), old_url),
+            ((datetime.now(timezone.utc) - timedelta(days=40)).isoformat(), old_url),
         )
         conn.commit()
 
@@ -114,6 +110,28 @@ def test_delete_old_articles(temp_db):
     assert deleted == 1
     assert not database.article_exists(old_url, temp_db)
     assert database.article_exists(new_url, temp_db)
+
+
+def test_get_articles_without_summary(temp_db):
+    database.insert_article({"url": "https://example.com/a", "title": "A", "content": "Content A"}, temp_db)
+    database.insert_article({"url": "https://example.com/b", "title": "B", "content": "Content B", "summary": "Already summarized"}, temp_db)
+    database.insert_article({"url": "https://example.com/c", "title": "C"}, temp_db)  # no content
+
+    unsummarized = database.get_articles_without_summary(db_path=temp_db)
+    assert len(unsummarized) == 1
+    assert unsummarized[0]["url"] == "https://example.com/a"
+
+
+def test_update_article_summary(temp_db):
+    database.insert_article({"url": "https://example.com/sum", "title": "Sum Test"}, temp_db)
+    result = database.update_article_summary("https://example.com/sum", "New summary", temp_db)
+    assert result is True
+
+    article = database.get_article_by_url("https://example.com/sum", temp_db)
+    assert article["summary"] == "New summary"
+
+    result = database.update_article_summary("https://example.com/nonexistent", "Nope", temp_db)
+    assert result is False
 
 
 def test_missing_required_fields(temp_db):

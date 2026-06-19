@@ -158,7 +158,7 @@ def validate_image(image_data: bytes) -> Tuple[bool, Optional[str]]:
 
 def download_image(
     url: str,
-    output_dir: str = "images",
+    output_dir: str = None,
     max_retries: int = 3,
     retry_delay: float = 1.0,
     timeout: int = 30
@@ -181,6 +181,10 @@ def download_image(
         ImageValidationError: If downloaded file is not a valid image
         NetworkError: If network-related errors occur
     """
+    # Default to project-root-relative images directory
+    if output_dir is None:
+        output_dir = str(Path(__file__).parent.parent / "images")
+
     # Create output directory if it doesn't exist
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
