@@ -98,9 +98,16 @@ python verify.py --full
 
 Player-first weekly digest: articles are scored 0-100 (AI gamer-value + cross-source
 clustering + freshness + engagement), the top items become an English HTML blog post
-(sections: Play this week / Mark your calendar / Coming soon / What to watch /
+(sections: Play this week / Mark your calendar / Coming soon & worth your money —
+out-now releases from the past week first, then upcoming / What to watch /
+Deals worth grabbing — sales & free promos found by keyword heuristic /
 Don't get burned), saved to `data/digests/YYYY-MM-DD-digest.html` and optionally
 pushed to Shopify as a **draft** article (a human reviews & publishes).
+
+The Shopify draft gets a branded 1200x630 cover image
+(`src/image_generator.py`, saved as `data/digests/YYYY-MM-DD-cover.png`,
+attached base64 with alt text) and an AI-composed `summary_html` excerpt
+ending with "Your 5-minute catch-up. →".
 
 ```bash
 # Score articles from the last 7 days
@@ -117,9 +124,11 @@ python -m src.pipeline --all --summarize --score --digest --publish-digest
 ```
 
 The scheduler runs the whole flow automatically every **Monday 09:00**
-(disable with `--no-digest`). Shopify setup: set `SHOPIFY_STORE_DOMAIN`,
-`SHOPIFY_ADMIN_TOKEN` (shpat_, `write_content` scope) and optionally
-`SHOPIFY_BLOG_ID` in `.env` — see `.env.example`.
+(disable with `--no-digest`). Shopify auth uses the **client credentials
+grant** — a fresh 24h access token is exchanged on every publish run: set
+`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`
+(app needs `write_content`) and optionally `SHOPIFY_BLOG_ID` in `.env`;
+a static `SHOPIFY_ADMIN_TOKEN` works as fallback — see `.env.example`.
 
 ---
 

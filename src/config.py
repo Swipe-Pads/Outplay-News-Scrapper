@@ -53,7 +53,9 @@ class Config:
 
     # Shopify blog publishing (weekly digest drafts)
     SHOPIFY_STORE_DOMAIN = os.getenv('SHOPIFY_STORE_DOMAIN', '')
-    SHOPIFY_ADMIN_TOKEN = os.getenv('SHOPIFY_ADMIN_TOKEN', '')
+    SHOPIFY_CLIENT_ID = os.getenv('SHOPIFY_CLIENT_ID', '')
+    SHOPIFY_CLIENT_SECRET = os.getenv('SHOPIFY_CLIENT_SECRET', '')
+    SHOPIFY_ADMIN_TOKEN = os.getenv('SHOPIFY_ADMIN_TOKEN', '')  # optional static fallback
     SHOPIFY_BLOG_ID = os.getenv('SHOPIFY_BLOG_ID', '')
 
     # Database

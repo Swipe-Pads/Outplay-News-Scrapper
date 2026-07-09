@@ -5,7 +5,7 @@ requests>=2.31.0
 beautifulsoup4>=4.12.2
 lxml>=5.1.0
 
-# Image processing
+# Image processing (article images + digest cover generation)
 Pillow>=10.1.0
 
 # AI summarization
