@@ -365,6 +365,19 @@ def main():
                         help='Generate AI summaries')
     parser.add_argument('--summarize-existing', action='store_true',
                         help='Summarize existing articles that lack summaries')
+
+    # Scoring & weekly digest
+    parser.add_argument('--score', action='store_true',
+                        help='Score recent articles 0-100 (gamer value, clustering, freshness)')
+    parser.add_argument('--digest', action='store_true',
+                        help='Generate the weekly HTML digest from top-scored articles')
+    parser.add_argument('--since', type=int, default=7, metavar='N',
+                        help='Days back for --score/--digest (default: 7)')
+    parser.add_argument('--publish-digest', action='store_true',
+                        help='Publish the latest digest as a DRAFT Shopify blog article')
+    parser.add_argument('--no-ai-score', action='store_true',
+                        help='Skip the AI gamer-value component when scoring')
+
     parser.add_argument('--verbose', action='store_true',
                         help='Enable DEBUG logging')
 
@@ -386,13 +399,17 @@ def main():
         sys.exit(0)
 
     # Validate args
-    if not any([args.all, args.source_type, args.source, args.url, args.batch, args.summarize_existing]):
-        parser.error("Use --all, --source-type, --source, --url, --batch, or --summarize-existing")
+    if not any([args.all, args.source_type, args.source, args.url, args.batch,
+                args.summarize_existing, args.score, args.digest, args.publish_digest]):
+        parser.error("Use --all, --source-type, --source, --url, --batch, "
+                     "--summarize-existing, --score, --digest, or --publish-digest")
 
     try:
         init_db(db_path)
 
-        # Multi-source mode
+        exit_code = 0
+
+        # Multi-source mode (can be combined with --score/--digest/--publish-digest)
         if args.all or args.source_type or args.source:
             stats = scrape_all_sources(
                 source_type=args.source_type,
@@ -405,10 +422,42 @@ def main():
                   f"{stats['failed']} failed")
             if args.summarize:
                 print(f"API cost: {cost_tracker}")
-            sys.exit(0 if stats['failed'] == 0 else 1)
+            if stats['failed'] != 0:
+                exit_code = 1
+            if not (args.score or args.digest or args.publish_digest):
+                sys.exit(exit_code)
+
+        # Score recent articles
+        if args.score:
+            from src.scorer import score_recent_articles
+            score_stats = score_recent_articles(
+                days=args.since, db_path=db_path, use_ai=not args.no_ai_score
+            )
+            print(f"\nScored: {score_stats['scored']}/{score_stats['total']} articles "
+                  f"({score_stats['failed']} failed)")
+
+        # Generate weekly digest
+        if args.digest:
+            from src.digest import generate_digest
+            digest_path = generate_digest(since_days=args.since, db_path=db_path)
+            print(f"\nDigest saved: {digest_path}")
+
+        # Publish latest digest as Shopify draft
+        if args.publish_digest:
+            from src.shopify_publisher import publish_digest_draft, ShopifyPublishError
+            try:
+                shopify_article = publish_digest_draft()
+                print(f"\nShopify draft created: id={shopify_article.get('id')} — "
+                      f"'{shopify_article.get('title')}' (review & publish in Shopify Admin)")
+            except ShopifyPublishError as e:
+                print(f"\nShopify publish failed: {e}")
+                sys.exit(1)
+
+        if args.score or args.digest or args.publish_digest:
+            sys.exit(exit_code)
 
         # Summarize existing
-        elif args.summarize_existing:
+        if args.summarize_existing:
             stats = summarize_unsummarized(limit=args.limit, db_path=db_path)
             print(f"\nSummarized: {stats['success']} done, {stats['failed']} failed")
             sys.exit(0)

@@ -44,6 +44,7 @@ def init_db(db_path: str = "data/articles.db") -> None:
                     source_type TEXT DEFAULT 'website',
                     source_name TEXT DEFAULT 'pocketgamer',
                     content_id TEXT,
+                    importance_score REAL,
                     scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -65,6 +66,8 @@ def init_db(db_path: str = "data/articles.db") -> None:
                 conn.execute("ALTER TABLE articles ADD COLUMN content_id TEXT")
             if 'strapi_id' not in columns:
                 conn.execute("ALTER TABLE articles ADD COLUMN strapi_id INTEGER")
+            if 'importance_score' not in columns:
+                conn.execute("ALTER TABLE articles ADD COLUMN importance_score REAL")
 
             conn.commit()
     except sqlite3.Error as e:
@@ -204,6 +207,41 @@ def update_article_summary(url: str, summary: str, db_path: str = "data/articles
             return cursor.rowcount > 0
     except sqlite3.Error as e:
         raise DatabaseError(f"Failed to update article summary: {e}") from e
+
+
+def update_article_score(url: str, score: float, db_path: str = "data/articles.db") -> bool:
+    """Update the importance_score field for an article."""
+    try:
+        with _get_connection(db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE articles SET importance_score = ?, updated_at = CURRENT_TIMESTAMP WHERE url = ?",
+                (score, url)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to update article score: {e}") from e
+
+
+def get_top_scored_articles(
+    days: int = 7, limit: int = 30, db_path: str = "data/articles.db"
+) -> List[dict]:
+    """Get highest-scored articles from the last N days (importance_score DESC)."""
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        with _get_connection(db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM articles
+                WHERE scraped_at >= ? AND importance_score IS NOT NULL
+                ORDER BY importance_score DESC, scraped_at DESC
+                LIMIT ?
+                """,
+                (cutoff.strftime('%Y-%m-%d %H:%M:%S'), int(limit)),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        raise DatabaseError(f"Failed to get top scored articles: {e}") from e
 
 
 def get_recent_articles(days: int = 30, db_path: str = "data/articles.db") -> List[dict]:

@@ -35,8 +35,8 @@ Built for the SwipePads mobile games launcher.
 
 ### Multi-source extension (NEW)
 - `src/sources/` — collector abstraction with `BaseCollector` ABC
-- **7 websites**: pocketgamer, gamingonphone, droidgamers, toucharcade, pockettactics, addictinggames, minireview
-- **14 YouTube channels**: iFerg, RiseofMobileGames, CallOfDutyMobile, BobbyPlays, OrangeJuice, etc.
+- **5 websites**: pocketgamer, gamingonphone, droidgamers, toucharcade (via RSS), pockettactics (addictinggames & minireview removed — dead weight)
+- **12 YouTube channels**: iFerg, RiseofMobileGames, CallOfDutyMobile, BobbyPlays, OrangeJuice, Techzamazing, SnapdragonProSeries, etc.
 - **3 Reddit subreddits**: r/AndroidGaming, r/MobileGaming, r/iosgaming
 - Database migrated: `source_type`, `source_name`, `content_id` columns
 - CLI: `--all`, `--source-type`, `--source`, `--list-sources`
@@ -94,6 +94,35 @@ python verify.py --full
 
 ---
 
+## Weekly Digest (scoring → HTML post → Shopify draft)
+
+Player-first weekly digest: articles are scored 0-100 (AI gamer-value + cross-source
+clustering + freshness + engagement), the top items become an English HTML blog post
+(sections: Play this week / Mark your calendar / Coming soon / What to watch /
+Don't get burned), saved to `data/digests/YYYY-MM-DD-digest.html` and optionally
+pushed to Shopify as a **draft** article (a human reviews & publishes).
+
+```bash
+# Score articles from the last 7 days
+python -m src.pipeline --score
+
+# Generate the digest (last N days, default 7)
+python -m src.pipeline --digest --since 7
+
+# Push latest digest as a Shopify blog DRAFT
+python -m src.pipeline --publish-digest
+
+# Full weekly flow in one shot
+python -m src.pipeline --all --summarize --score --digest --publish-digest
+```
+
+The scheduler runs the whole flow automatically every **Monday 09:00**
+(disable with `--no-digest`). Shopify setup: set `SHOPIFY_STORE_DOMAIN`,
+`SHOPIFY_ADMIN_TOKEN` (shpat_, `write_content` scope) and optionally
+`SHOPIFY_BLOG_ID` in `.env` — see `.env.example`.
+
+---
+
 ## API Keys needed
 
 | Service | Env Variable | How to get | Cost |
@@ -136,10 +165,10 @@ src/database.py       — SQLite (source_type, source_name, content_id)
 
 ### High Priority
 - [ ] Fix PocketGamer scraper — 0 URLs discovered, site may have changed structure
-- [ ] Remove TouchArcade from sources — site shut down (403 on all pages)
-- [ ] Fix PocketTactics selectors — scraping category pages instead of articles
-- [ ] Fix AddictingGames — scraping game category pages, not news articles
-- [ ] Research MiniReview.io — 0 URLs found, may need JS rendering
+- [x] TouchArcade 403 — fixed via RSS feed + browser User-Agent (falls back gracefully)
+- [x] Fix PocketTactics selectors — now targets /{topic}/{article-slug} paths only
+- [x] Remove AddictingGames — dead weight (game category pages, no news)
+- [x] Remove MiniReview.io — dead weight (JS-rendered, 0 URLs)
 
 ### YouTube & Reddit (need API keys)
 - [ ] Set up YouTube Data API key and test 14 channels

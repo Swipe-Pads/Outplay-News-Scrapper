@@ -11,13 +11,14 @@ from typing import List
 from src.config import Config
 
 
-def fetch_page(url: str, save_to: str = None) -> str:
+def fetch_page(url: str, save_to: str = None, headers: dict = None) -> str:
     """
     Fetch HTML content from a URL.
 
     Args:
         url: The URL to fetch
         save_to: Optional path to save the HTML (relative to project root)
+        headers: Optional extra headers (e.g. custom User-Agent) merged over defaults
 
     Returns:
         str: The HTML content
@@ -25,12 +26,15 @@ def fetch_page(url: str, save_to: str = None) -> str:
     Raises:
         requests.RequestException: If the request fails
     """
-    headers = {
+    request_headers = {
         'User-Agent': Config.USER_AGENT,
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Connection': 'keep-alive',
     }
+    if headers:
+        request_headers.update(headers)
+    headers = request_headers
 
     try:
         response = requests.get(url, headers=headers, timeout=30)

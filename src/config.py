@@ -51,6 +51,11 @@ class Config:
     STRAPI_API_TOKEN = os.getenv('STRAPI_API_TOKEN', '')
     STRAPI_PUBLISH = os.getenv('STRAPI_PUBLISH', 'false').lower() == 'true'
 
+    # Shopify blog publishing (weekly digest drafts)
+    SHOPIFY_STORE_DOMAIN = os.getenv('SHOPIFY_STORE_DOMAIN', '')
+    SHOPIFY_ADMIN_TOKEN = os.getenv('SHOPIFY_ADMIN_TOKEN', '')
+    SHOPIFY_BLOG_ID = os.getenv('SHOPIFY_BLOG_ID', '')
+
     # Database
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/articles.db')
 

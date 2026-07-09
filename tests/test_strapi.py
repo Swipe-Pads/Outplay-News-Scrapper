@@ -241,6 +241,12 @@ class TestGuessMimeType:
 # === Sync ===
 
 class TestSync:
+    @pytest.fixture(autouse=True)
+    def fake_strapi_token(self, monkeypatch):
+        """sync() requires STRAPI_API_TOKEN — fake it so tests don't need .env."""
+        from src.config import Config
+        monkeypatch.setattr(Config, 'STRAPI_API_TOKEN', 'test-token')
+
     @pytest.fixture
     def temp_db(self, tmp_path):
         db_path = tmp_path / "test.db"

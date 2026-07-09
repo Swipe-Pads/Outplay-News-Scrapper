@@ -14,22 +14,24 @@ from src.config import Config
 logger = logging.getLogger(__name__)
 
 # Channel configs: name -> channel ID
-# Handles (@name) are resolved to channel IDs at first use
+# Prefer hardcoded channel IDs (fewer API units, no flaky handle resolution);
+# handles (@name) are resolved to channel IDs at first use only when no ID is known.
+#
+# Removed: "MobileGameplay"/Powerbang (UCqSeA-rZs6GOfZrs9jZRXtA, dead since Nov 2025)
+#          Pocket Gamer channel (UCJKOvdk-nVzDAFR_9MF64sw, dormant)
 YOUTUBE_CHANNELS = {
-    "Ferg": "UCJKOvdk-nVzDAFR_9MF64sw",
-    "GameSpot_Mobile": "UCyo4ROy9-8ymQTBWcPA5Fjg",
+    "Techzamazing": "UCyo4ROy9-8ymQTBWcPA5Fjg",
     "RiseofMobileGames": None,       # @RiseofMobileGames
     "DowntoTop": None,               # @DowntoTop
     "iFerg": None,                    # @iFerg
-    "MobileGameplay": "UCqSeA-rZs6GOfZrs9jZRXtA",
     "ParkerTheSlayer": None,          # @ParkerTheSlayer2nd
-    "GamingMobileGM": None,           # @GamingMobileGM
-    "CallOfDutyMobile": None,         # @callofdutymobile
+    "GamingMobileGM": "UCCLVf7wyOpUmB63mVpJmU5w",
+    "CallOfDutyMobile": "UCj9bJX9hh3pXjktcsOLJdgw",
     "BobbyPlays": None,               # @BobbyPlays
-    "ESLMobile": None,                # @ESLMobile
-    "OrangeJuice": None,              # @orangejuice
+    "SnapdragonProSeries": "UC3wGgfxWJiIquQtSWlYfZcQ",  # ex-ESL Mobile (ESL rebrand)
+    "OrangeJuice": "UC3S6nIDGJ5OtpC-mbvFA8Ew",
     "MobileGamingNews": "UCRW7gbgekVjxUOmKHBdz8Og",
-    "BenTimm": None,                  # @bentimm1
+    "BenTimm": "UCMYdLBEudBeU-c0AguEaiHA",
 }
 
 YOUTUBE_HANDLES = {
@@ -37,12 +39,7 @@ YOUTUBE_HANDLES = {
     "DowntoTop": "@DowntoTop",
     "iFerg": "@iFerg",
     "ParkerTheSlayer": "@ParkerTheSlayer2nd",
-    "GamingMobileGM": "@GamingMobileGM",
-    "CallOfDutyMobile": "@callofdutymobile",
     "BobbyPlays": "@BobbyPlays",
-    "ESLMobile": "@ESLMobile",
-    "OrangeJuice": "@orangejuice",
-    "BenTimm": "@bentimm1",
 }
 
 

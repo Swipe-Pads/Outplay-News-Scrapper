@@ -108,6 +108,56 @@ def strapi_sync_job(batch_size: int = 20, publish: bool = None):
         logger.error(f"Strapi sync job failed: {e}")
 
 
+def weekly_digest_job(since_days: int = 7, limit: int = DEFAULT_SCRAPE_LIMIT):
+    """
+    Weekly digest job (Mondays 09:00):
+    scrape all sources -> score -> generate digest -> publish Shopify draft.
+    """
+    logger.info("=" * 60)
+    logger.info(f"WEEKLY DIGEST JOB — {datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+    db_path = str(Config.DATABASE_FULL_PATH)
+
+    # 1. Fresh scrape of all sources
+    try:
+        init_db(db_path)
+        stats = scrape_all_sources(limit=limit, summarize=True, db_path=db_path)
+        logger.info(f"Digest scrape: {stats['success']} new, "
+                    f"{stats['skipped']} skipped, {stats['failed']} failed")
+    except Exception as e:
+        logger.error(f"Digest scrape failed (continuing with existing articles): {e}")
+
+    # 2. Score recent articles
+    try:
+        from src.scorer import score_recent_articles
+        score_stats = score_recent_articles(days=since_days, db_path=db_path)
+        logger.info(f"Digest scoring: {score_stats['scored']}/{score_stats['total']} scored")
+    except Exception as e:
+        logger.error(f"Digest scoring failed (continuing): {e}")
+
+    # 3. Generate the digest HTML
+    try:
+        from src.digest import generate_digest
+        digest_path = generate_digest(since_days=since_days, db_path=db_path)
+        logger.info(f"Digest generated: {digest_path}")
+    except Exception as e:
+        logger.error(f"Digest generation failed — skipping publish: {e}")
+        return
+
+    # 4. Publish as Shopify draft (human reviews & publishes)
+    try:
+        from src.shopify_publisher import publish_digest_draft, ShopifyPublishError
+        try:
+            article = publish_digest_draft(html_path=digest_path)
+            logger.info(f"Shopify draft created: id={article.get('id')}, "
+                        f"title='{article.get('title')}'")
+        except ShopifyPublishError as e:
+            logger.error(f"Shopify publish skipped: {e}")
+    except Exception as e:
+        logger.error(f"Shopify publish failed: {e}")
+
+
 def health_check():
     """Check system health and log status."""
     db_path = str(Config.DATABASE_FULL_PATH)
@@ -133,6 +183,7 @@ def create_scheduler(
     enable_export: bool = True,
     enable_cleanup: bool = True,
     enable_strapi: bool = True,
+    enable_digest: bool = True,
     export_format: str = 'json'
 ) -> BlockingScheduler:
     """
@@ -145,6 +196,7 @@ def create_scheduler(
         enable_export: Auto-export after scrape
         enable_cleanup: Daily cleanup of old articles
         enable_strapi: Auto-sync to Strapi CMS
+        enable_digest: Weekly digest (Mon 09:00 — scrape, score, digest, Shopify draft)
         export_format: Export format ('json' or 'xml')
 
     Returns:
@@ -190,6 +242,16 @@ def create_scheduler(
             name=f'Strapi sync (every {scrape_hours}h)',
         )
 
+    # Weekly digest — Monday 09:00 (scrape -> score -> digest -> Shopify draft)
+    if enable_digest:
+        scheduler.add_job(
+            weekly_digest_job,
+            trigger=CronTrigger(day_of_week='mon', hour=9, minute=0),
+            kwargs={'limit': scrape_limit},
+            id='weekly_digest_job',
+            name='Weekly digest (Mon 09:00)',
+        )
+
     # Health check — every hour
     scheduler.add_job(
         health_check,
@@ -218,6 +280,8 @@ def main():
                         help='Disable auto-cleanup')
     parser.add_argument('--no-strapi', action='store_true',
                         help='Disable Strapi CMS sync')
+    parser.add_argument('--no-digest', action='store_true',
+                        help='Disable the weekly digest job (Mon 09:00)')
     parser.add_argument('--health', action='store_true',
                         help='Run health check and exit')
     parser.add_argument('--stop', action='store_true',
@@ -269,6 +333,7 @@ def main():
         enable_export=not args.no_export,
         enable_cleanup=not args.no_cleanup,
         enable_strapi=not args.no_strapi,
+        enable_digest=not args.no_digest,
     )
 
     # Write PID
