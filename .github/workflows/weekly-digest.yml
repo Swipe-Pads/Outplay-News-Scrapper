@@ -1,0 +1,86 @@
+name: Weekly digest
+
+on:
+  schedule:
+    # 07:00 UTC Monday = 09:00 Europe/Warsaw in summer (CEST). In winter this fires 08:00 local.
+    - cron: '0 7 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore article DB (scraper-data branch)
+        run: |
+          mkdir -p data logs
+          if git fetch origin scraper-data 2>/dev/null; then
+            git show FETCH_HEAD:articles.db > data/articles.db && echo "DB restored" || echo "Branch exists but no articles.db yet"
+          else
+            echo "No scraper-data branch yet - starting fresh"
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape, score, compose digest, publish Shopify draft
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USER_AGENT: OutplayNewsScraper/1.0
+          SHOPIFY_STORE_DOMAIN: dkajsi-0s.myshopify.com
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOPIFY_BLOG_ID: '126947590478'
+          DATABASE_PATH: data/articles.db
+          LOG_LEVEL: INFO
+        run: |
+          python -m src.pipeline --all --score --digest --since 7 --publish-digest
+
+      - name: Persist DB (scraper-data branch)
+        if: always()
+        run: |
+          [ -f data/articles.db ] || { echo "No DB to persist"; exit 0; }
+          git config user.name "swipepads-digest-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if git fetch origin scraper-data 2>/dev/null; then
+            git worktree add /tmp/dbranch FETCH_HEAD
+          else
+            git worktree add --detach /tmp/dbranch
+            (cd /tmp/dbranch && git checkout --orphan scraper-data && git rm -rf --quiet . 2>/dev/null || true)
+          fi
+          cp data/articles.db /tmp/dbranch/articles.db
+          cd /tmp/dbranch
+          git add articles.db
+          if git commit -m "scraper data $(date -u +%Y-%m-%dT%H:%MZ)"; then
+            git push origin HEAD:scraper-data
+          else
+            echo "DB unchanged - nothing to push"
+          fi
+
+      - name: Upload digest artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ github.run_id }}
+          path: |
+            data/digests/*.html
+            data/digests/*.png
+          if-no-files-found: ignore
+          retention-days: 30
