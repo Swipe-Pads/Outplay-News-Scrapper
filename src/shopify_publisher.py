@@ -19,6 +19,7 @@ Env vars (see .env.example):
 
 import base64
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -260,6 +261,7 @@ def publish_digest_draft(
     # Click-worthy listing excerpt (AI, static fallback inside — never raises)
     summary_html = f"<p>{compose_excerpt(body_html)}</p>"
 
+    auto_publish = os.getenv('DIGEST_AUTO_PUBLISH', 'true').lower() == 'true'
     payload = {
         'article': {
             'title': title,
@@ -267,7 +269,9 @@ def publish_digest_draft(
             'tags': tags,
             'body_html': body_html,
             'summary_html': summary_html,
-            'published': False,  # ALWAYS draft-first — a human publishes
+            # auto-publish by default (user decision 2026-07-10);
+            # set DIGEST_AUTO_PUBLISH=false to restore draft-first review
+            'published': auto_publish,
         }
     }
 
@@ -292,8 +296,8 @@ def publish_digest_draft(
         raise ShopifyPublishError(f"Failed to create Shopify article: {e}{detail}") from e
 
     article = response.json().get('article', {})
+    state = 'published' if auto_publish else 'draft (review in Shopify Admin)'
     logger.info(
-        f"Draft created: id={article.get('id')}, title='{article.get('title')}' "
-        "(published: false — review it in Shopify Admin)"
+        f"Article created: id={article.get('id')}, title='{article.get('title')}' ({state})"
     )
     return article

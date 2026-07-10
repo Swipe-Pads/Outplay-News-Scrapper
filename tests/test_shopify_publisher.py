@@ -151,7 +151,8 @@ class TestPublishDraft:
 
         assert article['id'] == 42
         payload = mock_post.call_args[1]['json']
-        assert payload['article']['published'] is False
+        # auto-publish is the default; DIGEST_AUTO_PUBLISH=false restores draft-first
+        assert payload['article']['published'] is True
         assert payload['article']['body_html'] == '<p>Digest body</p>'
         assert payload['article']['summary_html'] == (
             '<p>Big story teaser. Your 5-minute catch-up. →</p>'
