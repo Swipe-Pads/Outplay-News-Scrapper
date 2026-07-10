@@ -97,6 +97,7 @@ def test_connection() -> bool:
         response = client.messages.create(
             model=Config.CLAUDE_MODEL,
             max_tokens=50,
+            thinking={"type": "disabled"},
             messages=[
                 {"role": "user", "content": "Say 'Connection successful' and nothing else."}
             ]
@@ -159,6 +160,8 @@ Use bullet format with the dot character for bullets. Each point should be short
             response = client.messages.create(
                 model=Config.CLAUDE_MODEL,
                 max_tokens=max_tokens,
+                # short article summaries: no thinking needed (Sonnet 5 defaults to adaptive)
+                thinking={"type": "disabled"},
                 messages=[{"role": "user", "content": prompt}]
             )
 
@@ -167,7 +170,7 @@ Use bullet format with the dot character for bullets. Each point should be short
                 output_tokens=response.usage.output_tokens
             )
 
-            summary = response.content[0].text.strip()
+            summary = next(b.text for b in response.content if b.type == "text").strip()
             logger.info(f"Summary generated ({len(summary)} chars)")
             return summary
 

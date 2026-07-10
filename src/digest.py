@@ -164,7 +164,9 @@ def compose_digest_html(articles: List[dict]) -> str:
     logger.info(f"Composing digest from {len(articles)} articles...")
     response = client.messages.create(
         model=Config.CLAUDE_MODEL,
-        max_tokens=4000,
+        # adaptive thinking (Sonnet 5 default) improves composition quality;
+        # headroom covers thinking + the HTML itself
+        max_tokens=8000,
         messages=[{"role": "user", "content": prompt}],
     )
     cost_tracker.add_usage(
@@ -172,7 +174,8 @@ def compose_digest_html(articles: List[dict]) -> str:
         output_tokens=response.usage.output_tokens,
     )
 
-    html = _strip_markdown_fences(response.content[0].text)
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    html = _strip_markdown_fences(text)
     if not html:
         raise DigestError("AI returned an empty digest")
 
@@ -265,13 +268,15 @@ def compose_excerpt(body_html: str) -> str:
         response = client.messages.create(
             model=Config.CLAUDE_MODEL,
             max_tokens=200,
+            # short excerpt: no thinking needed (Sonnet 5 defaults to adaptive)
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
         cost_tracker.add_usage(
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
         )
-        excerpt = response.content[0].text.strip().strip('"')
+        excerpt = next((b.text for b in response.content if b.type == "text"), "").strip().strip('"')
         if not excerpt:
             return fallback
         if not excerpt.endswith(EXCERPT_SUFFIX):

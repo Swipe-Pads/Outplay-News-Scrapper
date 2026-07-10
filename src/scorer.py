@@ -243,6 +243,8 @@ def ai_gamer_value_scores(articles: List[dict], batch_size: int = 20) -> List[in
         response = client.messages.create(
             model=Config.CLAUDE_MODEL,
             max_tokens=300,
+            # cheap batch scoring: no thinking (Sonnet 5 defaults to adaptive when omitted)
+            thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
         cost_tracker.add_usage(
@@ -250,7 +252,8 @@ def ai_gamer_value_scores(articles: List[dict], batch_size: int = 20) -> List[in
             output_tokens=response.usage.output_tokens,
         )
 
-        all_scores.extend(_parse_ai_scores(response.content[0].text, len(chunk)))
+        text = next(b.text for b in response.content if b.type == "text")
+        all_scores.extend(_parse_ai_scores(text, len(chunk)))
 
     return all_scores
 

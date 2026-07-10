@@ -23,7 +23,7 @@ from src.scorer import (
 
 def _make_mock_response(text, input_tokens=100, output_tokens=20):
     response = MagicMock()
-    response.content = [MagicMock(text=text)]
+    response.content = [MagicMock(text=text, type="text")]
     response.usage.input_tokens = input_tokens
     response.usage.output_tokens = output_tokens
     return response

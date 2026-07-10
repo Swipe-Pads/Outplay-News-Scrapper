@@ -19,7 +19,7 @@ def reset_cost_tracker():
 def _make_mock_response(text="mock summary", input_tokens=100, output_tokens=50):
     """Create a mock Anthropic API response."""
     response = MagicMock()
-    response.content = [MagicMock(text=text)]
+    response.content = [MagicMock(text=text, type="text")]
     response.usage.input_tokens = input_tokens
     response.usage.output_tokens = output_tokens
     response.model = "claude-sonnet-4-20250514"
