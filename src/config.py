@@ -58,6 +58,16 @@ class Config:
     SHOPIFY_ADMIN_TOKEN = os.getenv('SHOPIFY_ADMIN_TOKEN', '')  # optional static fallback
     SHOPIFY_BLOG_ID = os.getenv('SHOPIFY_BLOG_ID', '')
 
+    # Cloudflare Email Service (weekly digest mailing)
+    CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '')
+    CF_EMAIL_API_TOKEN = os.getenv('CF_EMAIL_API_TOKEN', '')
+    KV_NAMESPACE_ID = os.getenv('KV_NAMESPACE_ID', '')  # unsubscribe suppression list
+    MAIL_FROM = os.getenv('MAIL_FROM', '')
+    MAIL_FROM_NAME = os.getenv('MAIL_FROM_NAME', 'SwipePads Weekly')
+    MAIL_RATE_PER_SEC = float(os.getenv('MAIL_RATE_PER_SEC', '5'))
+    UNSUBSCRIBE_BASE_URL = os.getenv('UNSUBSCRIBE_BASE_URL', '')
+    UNSUB_SECRET = os.getenv('UNSUB_SECRET', '')
+
     # Database
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/articles.db')
 

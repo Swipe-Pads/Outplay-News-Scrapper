@@ -130,6 +130,18 @@ grant** — a fresh 24h access token is exchanged on every publish run: set
 (app needs `write_content`) and optionally `SHOPIFY_BLOG_ID` in `.env`;
 a static `SHOPIFY_ADMIN_TOKEN` works as fallback — see `.env.example`.
 
+### Mailing (Cloudflare Email Service)
+
+Publishing the post is the "go" button: `python -m src.pipeline
+--send-mailing` fetches the latest **published** blog article (last 5 days,
+deduped via `data/mailed.json`), pulls subscribers from Shopify (marketing
+consent = SUBSCRIBED), drops unsubscribed addresses (KV suppression list
+written by the `workers/unsubscribe/` Worker), and sends one personalized
+email per recipient via the Cloudflare Email Service REST API (throttled at
+`MAIL_RATE_PER_SEC`, HMAC unsubscribe links, RFC 8058 one-click headers).
+Preview with `--mailing-dry-run`. GitHub Actions runs it Monday 13:00 UTC
+(`.github/workflows/weekly-mailing.yml`). Full setup guide: `docs/mailing.md`.
+
 ---
 
 ## API Keys needed

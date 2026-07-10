@@ -1,0 +1,20 @@
+# SwipePads unsubscribe Worker
+#
+# One-time setup:
+#   1. Create the KV namespace and paste its id below:
+#        npx wrangler kv namespace create SUPPRESSIONS
+#   2. Set the shared HMAC secret (must equal UNSUB_SECRET in the mailer env):
+#        npx wrangler secret put UNSUB_SECRET
+#   3. Deploy:
+#        npx wrangler deploy
+#
+# The deployed URL (e.g. https://swipepads-unsubscribe.<account>.workers.dev
+# or a custom route) becomes UNSUBSCRIBE_BASE_URL for the mailer.
+
+name = "swipepads-unsubscribe"
+main = "worker.js"
+compatibility_date = "2026-04-01"
+
+[[kv_namespaces]]
+binding = "SUPPRESSIONS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

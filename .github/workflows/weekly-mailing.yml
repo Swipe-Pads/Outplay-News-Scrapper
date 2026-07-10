@@ -1,0 +1,78 @@
+name: Weekly mailing
+
+on:
+  schedule:
+    # Monday 13:00 UTC — the human publishes the digest post Monday morning;
+    # this run finds it published and mails it (publish-gates-mailing).
+    - cron: '0 13 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-mailing
+  cancel-in-progress: false
+
+jobs:
+  mailing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore mailed log (scraper-data branch)
+        run: |
+          mkdir -p data logs
+          if git fetch origin scraper-data 2>/dev/null; then
+            git show FETCH_HEAD:mailed.json > data/mailed.json && echo "mailed.json restored" || echo "Branch exists but no mailed.json yet"
+          else
+            echo "No scraper-data branch yet - starting fresh"
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send weekly mailing
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_EMAIL_API_TOKEN: ${{ secrets.CF_EMAIL_API_TOKEN }}
+          KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+          UNSUB_SECRET: ${{ secrets.UNSUB_SECRET }}
+          UNSUBSCRIBE_BASE_URL: ${{ secrets.UNSUBSCRIBE_BASE_URL }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_FROM_NAME: SwipePads Weekly
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOPIFY_STORE_DOMAIN: dkajsi-0s.myshopify.com
+          SHOPIFY_BLOG_ID: '126947590478'
+          DATABASE_PATH: data/articles.db
+          LOG_LEVEL: INFO
+        run: |
+          python -m src.pipeline --send-mailing
+
+      - name: Persist mailed log (scraper-data branch)
+        if: always()
+        run: |
+          [ -f data/mailed.json ] || { echo "No mailed.json to persist"; exit 0; }
+          git config user.name "swipepads-digest-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if git fetch origin scraper-data 2>/dev/null; then
+            git worktree add /tmp/dbranch FETCH_HEAD
+          else
+            git worktree add --detach /tmp/dbranch
+            (cd /tmp/dbranch && git checkout --orphan scraper-data && git rm -rf --quiet . 2>/dev/null || true)
+          fi
+          cp data/mailed.json /tmp/dbranch/mailed.json
+          cd /tmp/dbranch
+          git add mailed.json
+          if git commit -m "mailed log $(date -u +%Y-%m-%dT%H:%MZ)"; then
+            git push origin HEAD:scraper-data
+          else
+            echo "mailed.json unchanged - nothing to push"
+          fi

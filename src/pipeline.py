@@ -378,6 +378,12 @@ def main():
     parser.add_argument('--no-ai-score', action='store_true',
                         help='Skip the AI gamer-value component when scoring')
 
+    # Weekly mailing (Cloudflare Email Service)
+    parser.add_argument('--send-mailing', action='store_true',
+                        help='Mail the latest PUBLISHED blog digest to subscribers')
+    parser.add_argument('--mailing-dry-run', action='store_true',
+                        help='Preview the mailing (recipients + subject), send nothing')
+
     parser.add_argument('--verbose', action='store_true',
                         help='Enable DEBUG logging')
 
@@ -400,9 +406,11 @@ def main():
 
     # Validate args
     if not any([args.all, args.source_type, args.source, args.url, args.batch,
-                args.summarize_existing, args.score, args.digest, args.publish_digest]):
+                args.summarize_existing, args.score, args.digest, args.publish_digest,
+                args.send_mailing, args.mailing_dry_run]):
         parser.error("Use --all, --source-type, --source, --url, --batch, "
-                     "--summarize-existing, --score, --digest, or --publish-digest")
+                     "--summarize-existing, --score, --digest, --publish-digest, "
+                     "--send-mailing, or --mailing-dry-run")
 
     try:
         init_db(db_path)
@@ -453,7 +461,23 @@ def main():
                 print(f"\nShopify publish failed: {e}")
                 sys.exit(1)
 
-        if args.score or args.digest or args.publish_digest:
+        # Weekly mailing: latest PUBLISHED blog article -> subscribers
+        if args.send_mailing or args.mailing_dry_run:
+            from src.mailer import run_weekly_mailing, MailerError
+            try:
+                mail_stats = run_weekly_mailing(dry_run=args.mailing_dry_run)
+                if not args.mailing_dry_run:
+                    print(f"\nMailing: {mail_stats['sent']} sent, "
+                          f"{mail_stats['failed']} failed, "
+                          f"{mail_stats['suppressed']} suppressed")
+                    if mail_stats['failed'] > 0:
+                        exit_code = 1
+            except MailerError as e:
+                print(f"\nMailing failed: {e}")
+                sys.exit(1)
+
+        if (args.score or args.digest or args.publish_digest
+                or args.send_mailing or args.mailing_dry_run):
             sys.exit(exit_code)
 
         # Summarize existing
