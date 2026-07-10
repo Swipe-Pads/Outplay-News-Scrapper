@@ -60,7 +60,8 @@ class Config:
 
     # Cloudflare Email Service (weekly digest mailing)
     CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '')
-    CF_EMAIL_API_TOKEN = os.getenv('CF_EMAIL_API_TOKEN', '')
+    CF_EMAIL_API_TOKEN = os.getenv('CF_EMAIL_API_TOKEN', '')  # scope: Email Sending Send
+    CF_KV_API_TOKEN = os.getenv('CF_KV_API_TOKEN', '')  # scope: Workers KV read (falls back to email token)
     KV_NAMESPACE_ID = os.getenv('KV_NAMESPACE_ID', '')  # unsubscribe suppression list
     MAIL_FROM = os.getenv('MAIL_FROM', '')
     MAIL_FROM_NAME = os.getenv('MAIL_FROM_NAME', 'SwipePads Weekly')

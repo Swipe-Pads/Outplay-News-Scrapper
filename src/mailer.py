@@ -289,7 +289,8 @@ def get_suppressed_emails() -> Set[str]:
     """
     account_id = (Config.CF_ACCOUNT_ID or '').strip()
     namespace_id = (Config.KV_NAMESPACE_ID or '').strip()
-    token = (Config.CF_EMAIL_API_TOKEN or '').strip()
+    # dedicated KV token (least privilege); falls back to the email token
+    token = (Config.CF_KV_API_TOKEN or Config.CF_EMAIL_API_TOKEN or '').strip()
 
     if not (account_id and namespace_id and token):
         logger.warning("KV suppression list not configured — skipping suppression check")

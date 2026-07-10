@@ -42,6 +42,7 @@ jobs:
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_EMAIL_API_TOKEN: ${{ secrets.CF_EMAIL_API_TOKEN }}
+          CF_KV_API_TOKEN: ${{ secrets.CF_KV_API_TOKEN }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
           UNSUB_SECRET: ${{ secrets.UNSUB_SECRET }}
           UNSUBSCRIBE_BASE_URL: ${{ secrets.UNSUBSCRIBE_BASE_URL }}
