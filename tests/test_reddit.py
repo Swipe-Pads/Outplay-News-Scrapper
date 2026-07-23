@@ -1,8 +1,6 @@
-"""Tests for src/sources/reddit.py"""
+"""Tests for src/sources/reddit.py (public RSS/Atom feed implementation)"""
 
-import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import patch
 
 from src.sources.reddit import (
     RedditCollector,
@@ -11,34 +9,38 @@ from src.sources.reddit import (
 )
 
 
-def _make_mock_post(
+def _make_entry(
     title="Test Post",
-    score=100,
-    stickied=False,
-    selftext="Post content",
-    is_self=True,
+    author="testuser",
     permalink="/r/AndroidGaming/comments/abc/test_post/",
     post_id="abc",
-    author="testuser",
-    url=None,
+    published="2026-07-20T10:00:00+00:00",
+    content_html="&lt;p&gt;Post content&lt;/p&gt;",
     thumbnail=None,
-    preview=None,
-    created_utc=None,
 ):
-    post = MagicMock()
-    post.title = title
-    post.score = score
-    post.stickied = stickied
-    post.selftext = selftext
-    post.is_self = is_self
-    post.permalink = permalink
-    post.id = post_id
-    post.author = MagicMock(__str__=lambda s: author) if author else None
-    post.url = url or f"https://reddit.com{permalink}"
-    post.thumbnail = thumbnail
-    post.preview = preview
-    post.created_utc = created_utc or datetime(2025, 1, 1, tzinfo=timezone.utc).timestamp()
-    return post
+    thumb = f'<media:thumbnail url="{thumbnail}" />' if thumbnail else ''
+    return f"""
+    <entry>
+        <author><name>/u/{author}</name><uri>https://www.reddit.com/user/{author}</uri></author>
+        <id>t3_{post_id}</id>
+        {thumb}
+        <link href="https://www.reddit.com{permalink}" />
+        <published>{published}</published>
+        <updated>{published}</updated>
+        <title>{title}</title>
+        <content type="html">{content_html}</content>
+    </entry>
+    """
+
+
+def _make_feed(entries):
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom" '
+        'xmlns:media="http://search.yahoo.com/mrss/">'
+        + "".join(entries) +
+        '</feed>'
+    ).encode('utf-8')
 
 
 class TestRedditCollector:
@@ -47,127 +49,82 @@ class TestRedditCollector:
         assert c.source_type == "reddit"
         assert c.source_name == "AndroidGaming"
 
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_discover_filters_stickied(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        posts = [
-            _make_mock_post(title="Stickied", stickied=True, permalink="/r/AG/s/"),
-            _make_mock_post(title="Normal", stickied=False, permalink="/r/AG/n/"),
-        ]
-        mock_reddit.subreddit.return_value.hot.return_value = posts
-
+    @patch('src.sources.reddit._fetch_feed')
+    def test_discover_skips_automoderator(self, mock_fetch):
+        mock_fetch.return_value = _make_feed([
+            _make_entry(title="Weekly Thread", author="AutoModerator",
+                        permalink="/r/AG/comments/s/weekly/", post_id="s"),
+            _make_entry(title="Normal", permalink="/r/AG/comments/n/normal/",
+                        post_id="n"),
+        ])
         c = RedditCollector("AndroidGaming")
         urls = c.discover(limit=10)
         assert len(urls) == 1
-        assert "/r/AG/n/" in urls[0]
+        assert "/comments/n/" in urls[0]
 
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_discover_filters_low_score(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        posts = [
-            _make_mock_post(title="Low", score=1),
-            _make_mock_post(title="High", score=100, permalink="/r/AG/h/"),
-        ]
-        mock_reddit.subreddit.return_value.hot.return_value = posts
-
-        c = RedditCollector("AndroidGaming")
-        urls = c.discover(limit=10)
-        assert len(urls) == 1
-
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_discover_respects_limit(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        posts = [
-            _make_mock_post(permalink=f"/r/AG/{i}/") for i in range(10)
-        ]
-        mock_reddit.subreddit.return_value.hot.return_value = posts
-
+    @patch('src.sources.reddit._fetch_feed')
+    def test_discover_respects_limit(self, mock_fetch):
+        mock_fetch.return_value = _make_feed([
+            _make_entry(permalink=f"/r/AG/comments/{i}/p/", post_id=str(i))
+            for i in range(10)
+        ])
         c = RedditCollector("AndroidGaming")
         urls = c.discover(limit=3)
         assert len(urls) == 3
 
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_collect_self_post(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        mock_submission = _make_mock_post(
-            title="Game Review",
-            selftext="Great game!",
-            is_self=True,
-            post_id="xyz",
-        )
-        mock_reddit.submission.return_value = mock_submission
-
+    @patch('src.sources.reddit._fetch_feed')
+    def test_discover_returns_empty_on_error(self, mock_fetch):
+        mock_fetch.side_effect = RuntimeError("HTTP 429")
         c = RedditCollector("AndroidGaming")
-        item = c.collect("https://reddit.com/r/AG/comments/xyz/")
+        assert c.discover(limit=10) == []
+
+    @patch('src.sources.reddit._fetch_feed')
+    def test_collect_from_cache(self, mock_fetch):
+        mock_fetch.return_value = _make_feed([
+            _make_entry(
+                title="Game Review",
+                content_html="&lt;p&gt;Great game!&lt;/p&gt; submitted by /u/testuser",
+                post_id="xyz",
+                permalink="/r/AG/comments/xyz/review/",
+            ),
+        ])
+        c = RedditCollector("AndroidGaming")
+        urls = c.discover(limit=10)
+        item = c.collect(urls[0])
         assert item is not None
         assert item.title == "Game Review"
         assert item.source_type == "reddit"
         assert item.content_id == "xyz"
         assert "Great game!" in item.content
+        assert "submitted by" not in item.content
+        assert item.author == "u/testuser on r/AndroidGaming"
+        assert item.date == "2026-07-20T10:00:00+00:00"
 
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_collect_link_post(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        mock_submission = _make_mock_post(
-            title="External Link",
-            selftext="",
-            is_self=False,
-            url="https://example.com/article",
-        )
-        mock_reddit.submission.return_value = mock_submission
-
+    @patch('src.sources.reddit._fetch_feed')
+    def test_collect_with_media_thumbnail(self, mock_fetch):
+        mock_fetch.return_value = _make_feed([
+            _make_entry(thumbnail="https://img.com/thumb.jpg"),
+        ])
         c = RedditCollector("AndroidGaming")
-        item = c.collect("https://reddit.com/r/AG/comments/abc/")
-        assert item is not None
-        assert "https://example.com/article" in item.content
-
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_collect_with_thumbnail(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        mock_submission = _make_mock_post(
-            thumbnail="https://img.com/thumb.jpg",
-        )
-        mock_submission.preview = None
-        mock_reddit.submission.return_value = mock_submission
-
-        c = RedditCollector("AndroidGaming")
-        item = c.collect("https://reddit.com/r/AG/comments/abc/")
+        urls = c.discover(limit=10)
+        item = c.collect(urls[0])
         assert item.image_url == "https://img.com/thumb.jpg"
 
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_collect_handles_deleted_author(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-
-        mock_submission = _make_mock_post(author=None)
-        mock_submission.author = None
-        mock_reddit.submission.return_value = mock_submission
-
+    @patch('src.sources.reddit._fetch_feed')
+    def test_collect_image_from_content_html(self, mock_fetch):
+        mock_fetch.return_value = _make_feed([
+            _make_entry(
+                content_html='&lt;img src="https://preview.redd.it/pic.jpg?width=640&amp;amp;s=x" /&gt;'
+            ),
+        ])
         c = RedditCollector("AndroidGaming")
-        item = c.collect("https://reddit.com/r/AG/comments/abc/")
-        assert "[deleted]" in item.author
+        urls = c.discover(limit=10)
+        item = c.collect(urls[0])
+        assert item.image_url == "https://preview.redd.it/pic.jpg?width=640&s=x"
 
-    @patch('src.sources.reddit._get_reddit_client')
-    def test_collect_returns_none_on_error(self, mock_client_factory):
-        mock_reddit = MagicMock()
-        mock_client_factory.return_value = mock_reddit
-        mock_reddit.submission.side_effect = Exception("API error")
-
+    def test_collect_uncached_returns_none(self):
         c = RedditCollector("AndroidGaming")
-        result = c.collect("https://reddit.com/r/AG/comments/bad/")
-        assert result is None
+        assert c.collect("https://reddit.com/r/AG/comments/bad/") is None
 
 
 class TestGetRedditCollectors:

@@ -13,7 +13,7 @@ All 10 phases complete + multi-source extension beyond original MVP scope.
 ### What's working:
 - **7 website sources**: Pocket Gamer, GamingOnPhone, DroidGamers, TouchArcade, PocketTactics, AddictingGames, MiniReview
 - **14 YouTube channels** via Data API v3
-- **3 Reddit subreddits** via PRAW
+- **3 Reddit subreddits** via public JSON listings (no API credentials)
 - **AI summarization** via Anthropic Claude API
 - **JSON/XML export** with validation
 - **SQLite storage** with 30-day retention + auto-cleanup

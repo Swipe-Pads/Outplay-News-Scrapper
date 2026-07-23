@@ -14,9 +14,6 @@ anthropic>=0.72.0
 # YouTube Data API v3
 google-api-python-client>=2.108.0
 
-# Reddit API
-praw>=7.7.1
-
 # Configuration
 python-dotenv>=1.0.0
 

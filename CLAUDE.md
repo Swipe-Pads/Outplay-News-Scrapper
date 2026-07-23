@@ -5,7 +5,7 @@ Multi-source mobile gaming news aggregator with AI summaries, scheduled scraping
 
 ## Stack
 - Python 3.11+, SQLite (`data/articles.db`)
-- BeautifulSoup + lxml (web), google-api-python-client (YouTube), PRAW (Reddit)
+- BeautifulSoup + lxml (web), google-api-python-client (YouTube), public JSON listings (Reddit, no API creds)
 - Anthropic Claude (AI summaries), APScheduler (scheduling)
 - Strapi CMS integration (`src/strapi.py`)
 
