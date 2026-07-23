@@ -1,11 +1,14 @@
 name: Weekly mailing
 
 on:
-  # Automatic weekly sending is intentionally DISABLED for now (manual trigger only).
-  # To enable, uncomment the schedule block below.
-  # schedule:
-  #   - cron: '0 13 * * 1'   # Monday 13:00 UTC — digest auto-publishes at 07:00, mailing follows
-  workflow_dispatch: {}
+  schedule:
+    - cron: '0 13 * * 1'   # Monday 13:00 UTC — digest auto-publishes at 07:00, mailing follows
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview only (list recipients + subject, send nothing)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -55,7 +58,11 @@ jobs:
           DATABASE_PATH: data/articles.db
           LOG_LEVEL: INFO
         run: |
-          python -m src.pipeline --send-mailing
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            python -m src.pipeline --mailing-dry-run
+          else
+            python -m src.pipeline --send-mailing
+          fi
 
       - name: Persist mailed log (scraper-data branch)
         if: always()
