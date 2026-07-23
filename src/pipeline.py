@@ -431,9 +431,10 @@ def main():
             if args.summarize:
                 print(f"API cost: {cost_tracker}")
             if stats['failed'] != 0:
-                exit_code = 1
+                logger.warning(f"{stats['failed']} source item(s) failed during scraping "
+                               f"(non-fatal when composing digest)")
             if not (args.score or args.digest or args.publish_digest):
-                sys.exit(exit_code)
+                sys.exit(1 if stats['failed'] != 0 else 0)
 
         # Score recent articles
         if args.score:
