@@ -69,6 +69,10 @@ class Config:
     UNSUBSCRIBE_BASE_URL = os.getenv('UNSUBSCRIBE_BASE_URL', '')
     UNSUB_SECRET = os.getenv('UNSUB_SECRET', '')
 
+    # Newsletter inbox (news.outplay.game -> newsletter-inbox Worker -> KV)
+    NEWSLETTER_KV_NAMESPACE_ID = os.getenv('NEWSLETTER_KV_NAMESPACE_ID', '')
+    NEWSLETTER_SINCE_DAYS = float(os.getenv('NEWSLETTER_SINCE_DAYS', '8'))
+
     # Database
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/articles.db')
 

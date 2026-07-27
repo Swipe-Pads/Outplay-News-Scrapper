@@ -38,6 +38,13 @@ def _load_sources() -> List[BaseCollector]:
     except Exception as e:
         logger.warning(f"Failed to load Reddit collectors: {e}")
 
+    # Newsletters (news.outplay.game inbox)
+    try:
+        from src.sources.newsletter import get_newsletter_collectors
+        sources.extend(get_newsletter_collectors())
+    except Exception as e:
+        logger.warning(f"Failed to load newsletter collectors: {e}")
+
     return sources
 
 
@@ -61,7 +68,7 @@ def get_sources(
     Get sources filtered by type and/or name.
 
     Args:
-        source_type: "website", "youtube", or "reddit"
+        source_type: "website", "youtube", "reddit", or "newsletter"
         source_name: Specific source name (e.g., "pocketgamer", "iFerg")
 
     Returns:

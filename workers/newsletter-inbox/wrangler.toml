@@ -1,0 +1,24 @@
+# SwipePads newsletter-inbox Worker
+#
+# One-time setup:
+#   1. Create the KV namespace and paste its id below:
+#        npx wrangler kv namespace create NEWSLETTERS
+#   2. Deploy:
+#        npx wrangler deploy
+#   3. In the Cloudflare dashboard (zone outplay.game):
+#        Email Routing -> Settings -> Subdomains -> add "news"
+#        Email Routing -> Routing rules (news subdomain) -> catch-all ->
+#          action "Send to a Worker" -> swipepads-newsletter-inbox
+#      (The apex domain MX stays on Google Workspace — only the subdomain
+#      gets Cloudflare MX records.)
+#
+# The namespace id also becomes the NEWSLETTER_KV_NAMESPACE_ID secret for
+# the weekly-digest GitHub workflow.
+
+name = "swipepads-newsletter-inbox"
+main = "worker.js"
+compatibility_date = "2026-04-01"
+
+[[kv_namespaces]]
+binding = "NEWSLETTERS"
+id = "PLACEHOLDER_FILLED_AFTER_KV_CREATE"
