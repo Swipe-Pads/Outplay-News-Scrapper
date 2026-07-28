@@ -1,0 +1,32 @@
+name: Newsletter confirmations
+
+# Manual helper: prints double-opt-in confirmation links found in the
+# newsletter inbox KV, so subscriptions can be confirmed from the run log.
+
+on:
+  workflow_dispatch:
+    inputs:
+      since_days:
+        description: Scan window in days
+        required: false
+        default: "3"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Scan inbox KV for confirmation links
+        run: python scripts/newsletter_confirmations.py
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_API_TOKEN: ${{ secrets.CF_KV_API_TOKEN }}
+          NEWSLETTER_KV_NAMESPACE_ID: ${{ secrets.NEWSLETTER_KV_NAMESPACE_ID }}
+          SINCE_DAYS: ${{ inputs.since_days }}
