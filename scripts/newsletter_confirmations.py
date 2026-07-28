@@ -24,10 +24,19 @@ import requests
 CF_API_BASE = "https://api.cloudflare.com/client/v4"
 _TIMEOUT = 20
 
-ACCOUNT_ID = os.environ["CF_ACCOUNT_ID"]
-NAMESPACE_ID = os.environ["NEWSLETTER_KV_NAMESPACE_ID"]
-HEADERS = {"Authorization": f"Bearer {os.environ['CF_KV_API_TOKEN']}"}
+ACCOUNT_ID = os.environ["CF_ACCOUNT_ID"].strip()
+NAMESPACE_ID = os.environ["NEWSLETTER_KV_NAMESPACE_ID"].strip()
+HEADERS = {"Authorization": f"Bearer {os.environ['CF_KV_API_TOKEN'].strip()}"}
 SINCE_DAYS = float(os.environ.get("SINCE_DAYS") or 3)
+
+
+def _raise_with_body(response):
+    """CF error bodies carry the actual reason — surface them before raising."""
+    if response.status_code >= 400:
+        print(f"CF API {response.status_code}: {response.text[:500]}",
+              file=sys.stderr)
+    response.raise_for_status()
+
 
 URL_RE = re.compile(r"""https?://[^\s"'<>)\]]+""")
 CONFIRM_RE = re.compile(r"confirm|verif|activat|opt[-_]?in|validate", re.IGNORECASE)
@@ -43,7 +52,7 @@ def kv_list_keys():
         if cursor:
             params["cursor"] = cursor
         response = requests.get(url, headers=HEADERS, params=params, timeout=_TIMEOUT)
-        response.raise_for_status()
+        _raise_with_body(response)
         data = response.json()
         keys.extend(data.get("result") or [])
         cursor = (data.get("result_info") or {}).get("cursor")
@@ -55,7 +64,7 @@ def kv_get_value(key: str) -> bytes:
     url = (f"{CF_API_BASE}/accounts/{ACCOUNT_ID}/storage/kv/"
            f"namespaces/{NAMESPACE_ID}/values/{key}")
     response = requests.get(url, headers=HEADERS, timeout=_TIMEOUT)
-    response.raise_for_status()
+    _raise_with_body(response)
     return response.content
 
 
