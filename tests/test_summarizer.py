@@ -90,7 +90,7 @@ class TestSummarizeArticle:
         assert cost_tracker.total_output_tokens == 100
 
     @patch('src.summarizer.get_client')
-    def test_summarize_uses_config_model(self, mock_get_client):
+    def test_summarize_uses_summarize_model(self, mock_get_client):
         mock_client = MagicMock()
         mock_client.messages.create.return_value = _make_mock_response()
         mock_get_client.return_value = mock_client
@@ -98,7 +98,7 @@ class TestSummarizeArticle:
         summarize_article("Title", "Content " * 50)
 
         call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs['model'] == Config.CLAUDE_MODEL
+        assert call_kwargs['model'] == Config.MODEL_SUMMARIZE
 
 
 class TestSummarizeBatch:

@@ -36,6 +36,15 @@ class Config:
     CLAUDE_MODEL = os.getenv('CLAUDE_MODEL', 'claude-sonnet-5')
     API_RATE_LIMIT_SECONDS = float(os.getenv('API_RATE_LIMIT_SECONDS', '1.0'))
 
+    # Per-stage model routing.
+    # Summaries, batch scoring and JSON extraction are mechanical work that a
+    # small model does as well as a large one; digest composition is the single
+    # creative step readers actually see, so it keeps the strong model.
+    MODEL_SUMMARIZE = os.getenv('MODEL_SUMMARIZE', 'claude-haiku-4-5-20251001')
+    MODEL_SCORE = os.getenv('MODEL_SCORE', 'claude-haiku-4-5-20251001')
+    MODEL_EXTRACT = os.getenv('MODEL_EXTRACT', 'claude-haiku-4-5-20251001')
+    MODEL_DIGEST = os.getenv('MODEL_DIGEST', CLAUDE_MODEL)
+
     # YouTube API
     YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '')
     YOUTUBE_MAX_RESULTS = int(os.getenv('YOUTUBE_MAX_RESULTS', '10'))
@@ -82,6 +91,11 @@ class Config:
 
     # Retention
     ARTICLE_RETENTION_DAYS = int(os.getenv('ARTICLE_RETENTION_DAYS', '30'))
+
+    # Reject feed items older than this during discovery. Guards against feeds
+    # that stopped being updated but still serve a full backlog of old items
+    # (TouchArcade served April-2025 posts to a 2026 digest for months).
+    MAX_ITEM_AGE_DAYS = float(os.getenv('MAX_ITEM_AGE_DAYS', '21'))
 
     # Derived paths (relative to project root)
     DATABASE_FULL_PATH = PROJECT_ROOT / DATABASE_PATH

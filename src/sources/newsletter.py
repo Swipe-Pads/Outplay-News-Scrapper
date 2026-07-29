@@ -206,7 +206,7 @@ Email HTML:
 
     client = get_client()
     response = client.messages.create(
-        model=Config.CLAUDE_MODEL,
+        model=Config.MODEL_EXTRACT,
         max_tokens=3000,
         thinking={"type": "disabled"},
         messages=[{"role": "user", "content": prompt}],
@@ -214,6 +214,7 @@ Email HTML:
     cost_tracker.add_usage(
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
+        model=Config.MODEL_EXTRACT,
     )
 
     text = next((b.text for b in response.content if b.type == "text"), "").strip()

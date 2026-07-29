@@ -13,6 +13,7 @@ Sections (empty ones omitted):
 Output saved to data/digests/YYYY-MM-DD-digest.html.
 """
 
+import json
 import re
 import logging
 from datetime import datetime, timezone
@@ -126,6 +127,69 @@ def find_deal_articles(
     return deals
 
 
+def _plausible_release_date(release_date, article_date) -> bool:
+    """Reject extracted release dates that fall before the article announcing them.
+
+    Small models routinely stamp the wrong year on a bare "September 5-6",
+    defaulting to a year they know rather than the article's. A premiere dated
+    before its own announcement is such a slip, and a wrong date in the
+    calendar section is a mistake readers can see.
+    """
+    if not release_date or not article_date:
+        return True
+
+    text = str(release_date)
+    match = re.match(r'(\d{4})-(\d{2})-(\d{2})', text)
+    if not match:
+        return True  # vague forms like "2026 Q4" — pass through untouched
+
+    try:
+        released = datetime.fromisoformat(match.group(0)).date()
+        published = datetime.fromisoformat(
+            str(article_date).replace('Z', '+00:00')
+        ).date()
+    except (ValueError, TypeError):
+        return True
+
+    # A day of slack absorbs timezone differences between feed and article.
+    return (published - released).days <= 1
+
+
+def _format_facts(article: dict) -> str:
+    """Compact tag of extracted facts, e.g. '[launch; out 2026-08-14; iOS, Android]'.
+
+    Release dates and event types drive the calendar/coming-soon sections, so
+    handing them over explicitly beats making the model mine them from prose.
+    """
+    raw = article.get('entities')
+    if not raw:
+        return ''
+    try:
+        facts = json.loads(raw) if isinstance(raw, str) else raw
+    except (ValueError, TypeError):
+        return ''
+    if not isinstance(facts, dict):
+        return ''
+
+    parts = []
+    if facts.get('event_type'):
+        parts.append(str(facts['event_type']))
+    if facts.get('release_date'):
+        if _plausible_release_date(facts['release_date'], article.get('date')):
+            parts.append(f"out {facts['release_date']}")
+        else:
+            logger.info(
+                f"Dropped implausible release_date {facts['release_date']} "
+                f"(article dated {article.get('date')})"
+            )
+    if facts.get('price'):
+        parts.append(str(facts['price']))
+    platforms = facts.get('platforms')
+    if isinstance(platforms, list) and platforms:
+        parts.append(', '.join(str(p) for p in platforms[:3]))
+    return f"[{'; '.join(parts)}] " if parts else ''
+
+
 def _format_items(articles: List[dict]) -> str:
     """Format article rows into compact prompt lines ([DEAL] marks sale items)."""
     lines = []
@@ -134,7 +198,7 @@ def _format_items(articles: List[dict]) -> str:
         snippet = re.sub(r'\s+', ' ', snippet).strip()[:400]
         deal_tag = '[DEAL] ' if is_deal_article(article) else ''
         lines.append(
-            f"- {deal_tag}{article.get('title', 'Untitled')} | "
+            f"- {deal_tag}{_format_facts(article)}{article.get('title', 'Untitled')} | "
             f"{article.get('source_name', 'unknown')} ({article.get('source_type', '')}) | "
             f"{article.get('date') or 'no date'} | "
             f"{article.get('url', '')} | "
@@ -163,7 +227,7 @@ def compose_digest_html(articles: List[dict]) -> str:
 
     logger.info(f"Composing digest from {len(articles)} articles...")
     response = client.messages.create(
-        model=Config.CLAUDE_MODEL,
+        model=Config.MODEL_DIGEST,
         # adaptive thinking (Sonnet 5 default) improves composition quality;
         # headroom covers thinking + the HTML itself
         max_tokens=8000,
@@ -172,6 +236,7 @@ def compose_digest_html(articles: List[dict]) -> str:
     cost_tracker.add_usage(
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
+        model=Config.MODEL_DIGEST,
     )
 
     text = next((b.text for b in response.content if b.type == "text"), "")
@@ -266,15 +331,16 @@ def compose_excerpt(body_html: str) -> str:
         client = get_client()
         prompt = EXCERPT_PROMPT.format(suffix=EXCERPT_SUFFIX, body=body_html[:6000])
         response = client.messages.create(
-            model=Config.CLAUDE_MODEL,
+            model=Config.MODEL_SUMMARIZE,
             max_tokens=200,
-            # short excerpt: no thinking needed (Sonnet 5 defaults to adaptive)
+            # short excerpt: no thinking needed, small model
             thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
         cost_tracker.add_usage(
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
+            model=Config.MODEL_SUMMARIZE,
         )
         excerpt = next((b.text for b in response.content if b.type == "text"), "").strip().strip('"')
         if not excerpt:

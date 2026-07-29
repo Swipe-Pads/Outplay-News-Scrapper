@@ -7,8 +7,10 @@ Wraps existing scraper.py + parser.py with per-site configuration.
 import re
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import List, Optional
 
+from src.config import Config
 from src.sources.base import BaseCollector, CollectedItem
 from src.scraper import fetch_page
 from src.parser import extract_full_article
@@ -35,15 +37,27 @@ BROWSER_USER_AGENT = (
 )
 
 # Per-site configurations
+#
+# RSS-first wherever a feed exists: feeds give canonical article URLs and real
+# publication dates, while HTML listings drift silently whenever a site
+# restructures its URLs. Probed 2026-07-29 — every site here answers 200 to a
+# plain bot UA, so the historical 403s (gamingonphone, TouchArcade) are gone and
+# no TLS impersonation or headless browser is needed.
+#
 # Removed (dead weight): addictinggames (game category pages, no news/dates),
-# minireview (JS-rendered, 0 URLs discoverable without a headless browser).
+# minireview (JS-rendered, 0 URLs discoverable without a headless browser),
+# toucharcade (site dormant — its feed's newest item is from April 2025, and the
+# freshness floor in the scorer was letting those year-old posts into digests).
 WEBSITE_CONFIGS = {
+    # PocketGamer moved articles from /news/<slug> to /<game-or-topic>/<slug>,
+    # which left the old link pattern discovering 0 URLs. The feed is canonical.
     "pocketgamer": WebsiteConfig(
         name="pocketgamer",
         listing_url="https://www.pocketgamer.com/news/",
         base_url="https://www.pocketgamer.com",
-        link_pattern=r"/news/.+",
-        exclude_patterns=[r"\?page=", r"\.rss$"],
+        link_pattern=r"pocketgamer\.com/[\w-]+/[\w-]+/?$",
+        exclude_patterns=[r"\?page=", r"\.rss$", r"/browse/", r"/tag/", r"/author/"],
+        rss_url="https://www.pocketgamer.com/news/index.rss",
     ),
     "gamingonphone": WebsiteConfig(
         name="gamingonphone",
@@ -51,26 +65,18 @@ WEBSITE_CONFIGS = {
         base_url="https://gamingonphone.com",
         link_pattern=r"/news/.+",
         exclude_patterns=[r"/news/$", r"\?page="],
+        rss_url="https://gamingonphone.com/feed/",
     ),
+    # The old date pattern /\d{4}/\d{2}/.+ matched day-archive pages
+    # (/2026/07/28) rather than articles, so this collector was feeding the
+    # pipeline archive indexes. Articles now live at /news/<slug>.
     "droidgamers": WebsiteConfig(
         name="droidgamers",
         listing_url="https://www.droidgamers.com/",
         base_url="https://www.droidgamers.com",
-        link_pattern=r"/\d{4}/\d{2}/.+",  # date-based URL pattern
-        exclude_patterns=[r"/category/", r"/tag/"],
-    ),
-    # TouchArcade returns 403 for generic bot UAs on HTML pages.
-    # Fix: discover via their RSS feed + use a realistic browser User-Agent.
-    # If both the feed and the browser UA stop working, discover() returns []
-    # and the source is skipped gracefully.
-    "toucharcade": WebsiteConfig(
-        name="toucharcade",
-        listing_url="https://toucharcade.com/",
-        base_url="https://toucharcade.com",
-        link_pattern=r"/\d{4}/\d{2}/\d{2}/.+",
-        exclude_patterns=[r"/category/", r"/tag/", r"#comment"],
-        rss_url="https://toucharcade.com/feed/",
-        user_agent=BROWSER_USER_AGENT,
+        link_pattern=r"droidgamers\.com/(?:news|guides|reviews)/[\w-]+",
+        exclude_patterns=[r"/category/", r"/tag/", r"/page/"],
+        rss_url="https://www.droidgamers.com/feed/",
     ),
     # Pocket Tactics articles live at /{game-or-topic}/{article-slug}
     # (single-segment paths are category/hub pages — excluded via pattern).
@@ -83,6 +89,7 @@ WEBSITE_CONFIGS = {
             r"/author/", r"/category/", r"/tag/", r"/page/",
             r"/wp-", r"\?", r"/reviews/$",
         ],
+        rss_url="https://www.pockettactics.com/feed",
     ),
 }
 
@@ -104,7 +111,13 @@ class WebsiteCollector(BaseCollector):
         return None
 
     def _discover_from_rss(self, limit: int) -> List[str]:
-        """Discover article URLs from the site's RSS feed."""
+        """Discover article URLs from the site's RSS feed.
+
+        Items older than Config.MAX_ITEM_AGE_DAYS are dropped: a feed that
+        stopped updating still serves its whole backlog, and the scorer's
+        freshness floor (0.4) is not low enough to keep year-old posts out of a
+        digest on its own.
+        """
         from bs4 import BeautifulSoup
         from email.utils import parsedate_to_datetime
 
@@ -115,22 +128,33 @@ class WebsiteCollector(BaseCollector):
             return []
 
         soup = BeautifulSoup(xml, 'xml')
+        now = datetime.now(timezone.utc)
+        cutoff_days = Config.MAX_ITEM_AGE_DAYS
         urls = []
+        stale = 0
+
         for item in soup.find_all('item'):
             link_tag = item.find('link')
             if not link_tag or not link_tag.get_text(strip=True):
                 continue
             url = link_tag.get_text(strip=True).rstrip('/')
 
+            if any(re.search(ep, url) for ep in self.config.exclude_patterns):
+                continue
+
             # Cache feed metadata so collect() can fall back to it
-            # if the article page itself is blocked (e.g. 403).
+            # if the article page itself is unreachable.
             date_iso = None
             pub_date = item.find('pubDate')
             if pub_date and pub_date.get_text(strip=True):
                 try:
-                    date_iso = parsedate_to_datetime(
-                        pub_date.get_text(strip=True)
-                    ).isoformat()
+                    published = parsedate_to_datetime(pub_date.get_text(strip=True))
+                    if published.tzinfo is None:
+                        published = published.replace(tzinfo=timezone.utc)
+                    if (now - published).total_seconds() / 86400.0 > cutoff_days:
+                        stale += 1
+                        continue
+                    date_iso = published.isoformat()
                 except (ValueError, TypeError):
                     pass
 
@@ -148,6 +172,17 @@ class WebsiteCollector(BaseCollector):
                 urls.append(url)
             if len(urls) >= limit:
                 break
+
+        if stale:
+            logger.info(
+                f"[{self.source_name}] Skipped {stale} feed item(s) older than "
+                f"{cutoff_days:g} days"
+            )
+        if not urls and stale:
+            logger.warning(
+                f"[{self.source_name}] Feed has no items newer than {cutoff_days:g} "
+                f"days ({stale} stale) — source looks dormant, consider removing it"
+            )
 
         logger.info(f"[{self.source_name}] Discovered {len(urls)} article URLs via RSS")
         return urls

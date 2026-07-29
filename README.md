@@ -18,7 +18,7 @@ Built for the SwipePads mobile games launcher.
 - Proper Python package structure (`pyproject.toml`, `src/__init__.py`, killed all `sys.path.insert` hacks)
 - Parser 3x faster — single BeautifulSoup + shared JSON-LD per article instead of 3 separate parses
 - Database: parameterized SQL queries, `datetime.now(timezone.utc)`, `init_db()` once per batch
-- Summarizer: configurable model via `Config.CLAUDE_MODEL`, rate limiting with exponential backoff, resettable `CostTracker`
+- Summarizer: per-stage model routing (`MODEL_SUMMARIZE`/`MODEL_SCORE`/`MODEL_EXTRACT` on Haiku, `MODEL_DIGEST` on the strong model), rate limiting with exponential backoff, resettable `CostTracker` priced per model
 - Logging: single `basicConfig` in pipeline, no duplicate setup across modules
 
 ### Phase 6 completed (AI Summarization)
@@ -35,7 +35,7 @@ Built for the SwipePads mobile games launcher.
 
 ### Multi-source extension (NEW)
 - `src/sources/` — collector abstraction with `BaseCollector` ABC
-- **5 websites**: pocketgamer, gamingonphone, droidgamers, toucharcade (via RSS), pockettactics (addictinggames & minireview removed — dead weight)
+- **4 websites** (all RSS-first): pocketgamer, gamingonphone, droidgamers, pockettactics (addictinggames, minireview & toucharcade removed — dead weight)
 - **12 YouTube channels**: iFerg, RiseofMobileGames, CallOfDutyMobile, BobbyPlays, OrangeJuice, Techzamazing, SnapdragonProSeries, etc.
 - **3 Reddit subreddits**: r/AndroidGaming, r/MobileGaming, r/iosgaming
 - Database migrated: `source_type`, `source_name`, `content_id` columns
@@ -185,11 +185,14 @@ src/database.py       — SQLite (source_type, source_name, content_id)
 ## TODO
 
 ### High Priority
-- [ ] Fix PocketGamer scraper — 0 URLs discovered, site may have changed structure
-- [x] TouchArcade 403 — fixed via RSS feed + browser User-Agent (falls back gracefully)
-- [x] Fix PocketTactics selectors — now targets /{topic}/{article-slug} paths only
+- [x] Fix PocketGamer scraper — site moved articles from `/news/<slug>` to
+      `/<topic>/<slug>`; now discovers via `news/index.rss` (0 -> 20 URLs)
+- [x] Fix DroidGamers — old date pattern matched day-archive pages
+      (`/2026/07/28`) instead of articles; now RSS-first
+- [x] Remove TouchArcade — site dormant, newest feed item from April 2025
 - [x] Remove AddictingGames — dead weight (game category pages, no news)
 - [x] Remove MiniReview.io — dead weight (JS-rendered, 0 URLs)
+- [x] Fix PocketTactics selectors — now targets /{topic}/{article-slug} paths only
 
 ### YouTube & Reddit (need API keys)
 - [ ] Set up YouTube Data API key and test 14 channels
@@ -204,9 +207,14 @@ src/database.py       — SQLite (source_type, source_name, content_id)
 
 ### Content Quality
 - [ ] Filter out non-article pages (category pages, about, profiles)
-- [ ] Deduplicate similar articles across sources
+- [ ] Deduplicate similar articles across sources — title-Jaccard clustering
+      exists in the scorer but only awards a cross-source bonus; merging is
+      still delegated to the digest prompt
 - [ ] Add article quality scoring (content length, has image, has date)
 - [ ] Improve summarizer prompt for YouTube descriptions vs articles
+- [ ] Cross-week memory: the digest sees a 7-day window only, so a running
+      story reads as brand new every week. Retention (30 days) also deletes
+      the material such memory would need.
 
 ### Phase 2 Sources (later)
 - [ ] Twitter/X API ($100/mo) — 5 accounts to monitor
