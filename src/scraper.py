@@ -3,6 +3,8 @@ Web scraper module for SwipePads News Scraper.
 Handles fetching and parsing of Pocket Gamer news articles.
 """
 
+import logging
+import time
 from pathlib import Path
 
 import requests
@@ -10,15 +12,29 @@ from bs4 import BeautifulSoup
 from typing import List
 from src.config import Config
 
+logger = logging.getLogger(__name__)
 
-def fetch_page(url: str, save_to: str = None, headers: dict = None) -> str:
+# Transient failures worth a second attempt. 4xx (403/404) are the server's
+# final answer, so retrying them only wastes the rate-limit budget.
+RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+FETCH_MAX_ATTEMPTS = 3
+FETCH_BACKOFF_SECONDS = 2
+
+
+def fetch_page(
+    url: str,
+    save_to: str = None,
+    headers: dict = None,
+    max_attempts: int = FETCH_MAX_ATTEMPTS,
+) -> str:
     """
-    Fetch HTML content from a URL.
+    Fetch HTML content from a URL, retrying transient failures.
 
     Args:
         url: The URL to fetch
         save_to: Optional path to save the HTML (relative to project root)
         headers: Optional extra headers (e.g. custom User-Agent) merged over defaults
+        max_attempts: Attempts for timeouts, connection errors and 429/5xx
 
     Returns:
         str: The HTML content
@@ -36,31 +52,56 @@ def fetch_page(url: str, save_to: str = None, headers: dict = None) -> str:
         request_headers.update(headers)
     headers = request_headers
 
-    try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
+    last_error = None
 
-        html_content = response.text
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
 
-        # Save to file if requested
-        if save_to:
-            project_root = Path(__file__).parent.parent
-            save_path = project_root / save_to
-            save_path.parent.mkdir(parents=True, exist_ok=True)
+            if (response.status_code in RETRY_STATUS_CODES
+                    and attempt < max_attempts):
+                wait = FETCH_BACKOFF_SECONDS * attempt
+                logger.warning(
+                    f"HTTP {response.status_code} for {url} — retrying in {wait}s "
+                    f"(attempt {attempt}/{max_attempts})"
+                )
+                time.sleep(wait)
+                continue
 
-            # Use Path.write_text to ensure proper encoding
-            save_path.write_text(html_content, encoding='utf-8')
+            response.raise_for_status()
+            html_content = response.text
 
-            print(f"Saved HTML to: {save_path}")
+            # Save to file if requested
+            if save_to:
+                project_root = Path(__file__).parent.parent
+                save_path = project_root / save_to
+                save_path.parent.mkdir(parents=True, exist_ok=True)
 
-        return html_content
+                # Use Path.write_text to ensure proper encoding
+                save_path.write_text(html_content, encoding='utf-8')
 
-    except requests.Timeout:
-        raise requests.RequestException(f"Timeout while fetching {url}")
-    except requests.HTTPError as e:
-        raise requests.RequestException(f"HTTP error {e.response.status_code} while fetching {url}")
-    except requests.RequestException as e:
-        raise requests.RequestException(f"Error fetching {url}: {e}")
+                print(f"Saved HTML to: {save_path}")
+
+            return html_content
+
+        except requests.Timeout:
+            last_error = requests.RequestException(f"Timeout while fetching {url}")
+        except requests.HTTPError as e:
+            # Final answer from the server — do not retry
+            raise requests.RequestException(
+                f"HTTP error {e.response.status_code} while fetching {url}"
+            )
+        except requests.RequestException as e:
+            last_error = requests.RequestException(f"Error fetching {url}: {e}")
+
+        if attempt < max_attempts:
+            wait = FETCH_BACKOFF_SECONDS * attempt
+            logger.warning(
+                f"{last_error} — retrying in {wait}s (attempt {attempt}/{max_attempts})"
+            )
+            time.sleep(wait)
+
+    raise last_error
 
 
 def parse_article_links(html: str, limit: int = None) -> List[str]:

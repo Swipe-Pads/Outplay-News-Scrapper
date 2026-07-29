@@ -21,7 +21,7 @@ from src.database import (
     update_article_summary, get_article_count, DatabaseError
 )
 from src.summarizer import (
-    summarize_article, summarize_batch, cost_tracker,
+    summarize_article, summarize_and_extract, summarize_batch, cost_tracker,
     SummarizationError, APIKeyError
 )
 from src.config import Config
@@ -90,11 +90,12 @@ def process_collected_item(
         'content_id': item_dict.get('content_id'),
     }
 
-    # Summarize
+    # Summarize + extract facts (one API call for both)
     if summarize and article.get('content'):
         try:
-            summary = summarize_article(title, article['content'])
+            summary, entities = summarize_and_extract(title, article['content'])
             article['summary'] = summary
+            article['entities'] = entities
         except (SummarizationError, APIKeyError) as e:
             logger.warning(f"Summarization failed: {e}")
 
@@ -269,10 +270,12 @@ def process_single_article(
     else:
         article['image_path'] = None
 
-    # Summarize
+    # Summarize + extract facts (one API call for both)
     if summarize and article.get('content'):
         try:
-            article['summary'] = summarize_article(article['title'], article['content'])
+            article['summary'], article['entities'] = summarize_and_extract(
+                article['title'], article['content']
+            )
         except (SummarizationError, APIKeyError) as e:
             logger.warning(f"Summarization failed for {url}: {e}")
             article['summary'] = None

@@ -2,6 +2,7 @@
 SQLite database module for article storage.
 """
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -68,6 +69,9 @@ def init_db(db_path: str = "data/articles.db") -> None:
                 conn.execute("ALTER TABLE articles ADD COLUMN strapi_id INTEGER")
             if 'importance_score' not in columns:
                 conn.execute("ALTER TABLE articles ADD COLUMN importance_score REAL")
+            if 'entities' not in columns:
+                # JSON blob: games, companies, platforms, event_type, release_date, price
+                conn.execute("ALTER TABLE articles ADD COLUMN entities TEXT")
 
             conn.commit()
     except sqlite3.Error as e:
@@ -84,12 +88,16 @@ def insert_article(article: dict, db_path: str = "data/articles.db") -> int:
             conn.execute("PRAGMA foreign_keys = ON")
             cursor = conn.cursor()
 
+            entities = article.get("entities")
+            if isinstance(entities, dict):
+                entities = json.dumps(entities, ensure_ascii=False) if entities else None
+
             cursor.execute(
                 """
                 INSERT INTO articles (url, title, date, author, content, image_path, summary,
-                                      source_type, source_name, content_id, updated_at)
+                                      source_type, source_name, content_id, entities, updated_at)
                 VALUES (:url, :title, :date, :author, :content, :image_path, :summary,
-                        :source_type, :source_name, :content_id, CURRENT_TIMESTAMP)
+                        :source_type, :source_name, :content_id, :entities, CURRENT_TIMESTAMP)
                 ON CONFLICT(url) DO UPDATE SET
                     title=excluded.title,
                     date=excluded.date,
@@ -100,6 +108,8 @@ def insert_article(article: dict, db_path: str = "data/articles.db") -> int:
                     source_type=excluded.source_type,
                     source_name=excluded.source_name,
                     content_id=excluded.content_id,
+                    -- keep previously extracted facts when a re-scrape has none
+                    entities=COALESCE(excluded.entities, articles.entities),
                     updated_at=CURRENT_TIMESTAMP
                 """,
                 {
@@ -113,6 +123,7 @@ def insert_article(article: dict, db_path: str = "data/articles.db") -> int:
                     "source_type": article.get("source_type", "website"),
                     "source_name": article.get("source_name", "unknown"),
                     "content_id": article.get("content_id"),
+                    "entities": entities,
                 },
             )
             conn.commit()
@@ -195,14 +206,26 @@ def get_articles_without_summary(limit: int = None, db_path: str = "data/article
         raise DatabaseError(f"Failed to retrieve unsummarized articles: {e}") from e
 
 
-def update_article_summary(url: str, summary: str, db_path: str = "data/articles.db") -> bool:
-    """Update the summary field for an article."""
+def update_article_summary(
+    url: str,
+    summary: str,
+    db_path: str = "data/articles.db",
+    entities: dict = None,
+) -> bool:
+    """Update the summary field for an article, optionally with extracted entities."""
     try:
         with _get_connection(db_path) as conn:
-            cursor = conn.execute(
-                "UPDATE articles SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE url = ?",
-                (summary, url)
-            )
+            if entities:
+                cursor = conn.execute(
+                    "UPDATE articles SET summary = ?, entities = ?, "
+                    "updated_at = CURRENT_TIMESTAMP WHERE url = ?",
+                    (summary, json.dumps(entities, ensure_ascii=False), url)
+                )
+            else:
+                cursor = conn.execute(
+                    "UPDATE articles SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE url = ?",
+                    (summary, url)
+                )
             conn.commit()
             return cursor.rowcount > 0
     except sqlite3.Error as e:

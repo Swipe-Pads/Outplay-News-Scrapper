@@ -29,8 +29,8 @@ class TestCollectedItem:
 class TestRegistry:
     def test_list_sources_returns_all(self):
         sources = list_sources()
-        # 5 websites + 12 YouTube channels + 3 subreddits
-        assert len(sources) >= 20
+        # 4 websites + 12 YouTube channels + 3 subreddits
+        assert len(sources) >= 19
         types = {s['type'] for s in sources}
         assert 'website' in types
         assert 'youtube' in types
@@ -39,7 +39,9 @@ class TestRegistry:
     def test_get_sources_filter_by_type(self):
         websites = get_sources(source_type='website')
         assert all(s.source_type == 'website' for s in websites)
-        assert len(websites) == 5
+        # pocketgamer, gamingonphone, droidgamers, pockettactics
+        # (toucharcade dropped 2026-07-29 — dormant since April 2025)
+        assert len(websites) == 4
 
     def test_get_sources_filter_by_name(self):
         result = get_sources(source_name='pocketgamer')

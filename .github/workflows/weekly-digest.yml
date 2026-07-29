@@ -52,7 +52,7 @@ jobs:
           DATABASE_PATH: data/articles.db
           LOG_LEVEL: INFO
         run: |
-          python -m src.pipeline --all --score --digest --since 7 --publish-digest
+          python -m src.pipeline --all --summarize --score --digest --since 7 --publish-digest
 
       - name: Persist DB (scraper-data branch)
         if: always()
