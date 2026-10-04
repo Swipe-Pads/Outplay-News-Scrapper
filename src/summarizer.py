@@ -8,7 +8,7 @@ of news articles (3-5 bullet points, 200-300 characters).
 import time
 import logging
 from typing import Optional, Dict, List
-from anthropic import Anthropic, APIError, APIConnectionError, RateLimitError
+from anthropic import Anthropic, AnthropicVertex, APIError, APIConnectionError, RateLimitError
 from src.config import Config
 
 logger = logging.getLogger(__name__)
@@ -76,13 +76,15 @@ class CostTracker:
 cost_tracker = CostTracker()
 
 
-def get_client() -> Anthropic:
-    """Get configured Anthropic API client."""
+def get_client() -> Anthropic | AnthropicVertex:
+    """Get configured Claude client (Vertex AI when VERTEX_PROJECT_ID is set)."""
     is_valid, error_msg = Config.validate(provider='anthropic')
     if not is_valid:
         raise APIKeyError(error_msg)
 
     try:
+        if Config.VERTEX_PROJECT_ID:
+            return AnthropicVertex(project_id=Config.VERTEX_PROJECT_ID, region=Config.VERTEX_REGION)
         return Anthropic(api_key=Config.ANTHROPIC_API_KEY)
     except Exception as e:
         raise APIKeyError(f"Failed to initialize Anthropic client: {e}")

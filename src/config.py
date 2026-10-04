@@ -28,6 +28,11 @@ class Config:
     ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
+    # Claude via Google Cloud Vertex AI (billed to GCP). When the project ID is
+    # set, it takes precedence over ANTHROPIC_API_KEY; auth is GCP ADC.
+    VERTEX_PROJECT_ID = os.getenv('VERTEX_PROJECT_ID', '')
+    VERTEX_REGION = os.getenv('VERTEX_REGION', 'global')
+
     # Scraper Settings
     USER_AGENT = os.getenv('SCRAPER_USER_AGENT', 'SwipePadsScraper/1.0')
     RATE_LIMIT_SECONDS = int(os.getenv('SCRAPER_RATE_LIMIT_SECONDS', '2'))
@@ -99,7 +104,7 @@ class Config:
         """
         # If no provider specified, check that at least one is valid
         if provider is None:
-            has_anthropic = cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower()
+            has_anthropic = bool(cls.VERTEX_PROJECT_ID) or (cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower())
             has_openai = cls.OPENAI_API_KEY and 'your_' not in cls.OPENAI_API_KEY.lower()
 
             if not has_anthropic and not has_openai:
@@ -109,6 +114,8 @@ class Config:
 
         # Validate specific provider
         if provider == 'anthropic':
+            if cls.VERTEX_PROJECT_ID:
+                return True, "Vertex AI project configured"
             if not cls.ANTHROPIC_API_KEY:
                 return False, "ANTHROPIC_API_KEY not set in .env"
             if 'your_' in cls.ANTHROPIC_API_KEY.lower():
@@ -130,7 +137,7 @@ class Config:
         Determine which AI provider to use based on available keys.
         Returns: 'anthropic', 'openai', or None
         """
-        if cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower():
+        if cls.VERTEX_PROJECT_ID or (cls.ANTHROPIC_API_KEY and 'your_' not in cls.ANTHROPIC_API_KEY.lower()):
             return 'anthropic'
         elif cls.OPENAI_API_KEY and 'your_' not in cls.OPENAI_API_KEY.lower():
             return 'openai'

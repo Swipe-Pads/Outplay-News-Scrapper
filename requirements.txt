@@ -9,7 +9,7 @@ lxml>=5.1.0
 Pillow>=10.1.0
 
 # AI summarization
-anthropic>=0.72.0
+anthropic[vertex]>=0.72.0
 
 # YouTube Data API v3
 google-api-python-client>=2.108.0
