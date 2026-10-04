@@ -48,6 +48,7 @@ jobs:
         env:
           VERTEX_PROJECT_ID: gen-lang-client-0812754998
           VERTEX_REGION: global
+          AI_BACKEND: gemini
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           REDDIT_USER_AGENT: OutplayNewsScraper/1.0 (weekly digest; contact mt.godala@outplay.game)
           SHOPIFY_STORE_DOMAIN: dkajsi-0s.myshopify.com

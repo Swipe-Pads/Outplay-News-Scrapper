@@ -32,6 +32,10 @@ class Config:
     # set, it takes precedence over ANTHROPIC_API_KEY; auth is GCP ADC.
     VERTEX_PROJECT_ID = os.getenv('VERTEX_PROJECT_ID', '')
     VERTEX_REGION = os.getenv('VERTEX_REGION', 'global')
+    # 'gemini' answers all AI calls with Gemini on Vertex AI (requires VERTEX_PROJECT_ID);
+    # 'anthropic' uses Claude (via Vertex when VERTEX_PROJECT_ID is set, else ANTHROPIC_API_KEY).
+    AI_BACKEND = os.getenv('AI_BACKEND', 'anthropic').strip().lower()
+    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.8-flash')
 
     # Scraper Settings
     USER_AGENT = os.getenv('SCRAPER_USER_AGENT', 'SwipePadsScraper/1.0')

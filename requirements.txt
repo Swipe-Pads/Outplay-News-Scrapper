@@ -10,6 +10,7 @@ Pillow>=10.1.0
 
 # AI summarization
 anthropic[vertex]>=0.72.0
+google-genai>=1.20.0
 
 # YouTube Data API v3
 google-api-python-client>=2.108.0

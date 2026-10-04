@@ -76,13 +76,18 @@ class CostTracker:
 cost_tracker = CostTracker()
 
 
-def get_client() -> Anthropic | AnthropicVertex:
-    """Get configured Claude client (Vertex AI when VERTEX_PROJECT_ID is set)."""
+def get_client():
+    """Get configured AI client: Gemini (AI_BACKEND=gemini) or Claude (Vertex AI when VERTEX_PROJECT_ID is set)."""
     is_valid, error_msg = Config.validate(provider='anthropic')
     if not is_valid:
         raise APIKeyError(error_msg)
 
     try:
+        if Config.AI_BACKEND == 'gemini':
+            if not Config.VERTEX_PROJECT_ID:
+                raise APIKeyError("AI_BACKEND=gemini requires VERTEX_PROJECT_ID")
+            from src.gemini_backend import GeminiVertexClient
+            return GeminiVertexClient(project_id=Config.VERTEX_PROJECT_ID, region=Config.VERTEX_REGION)
         if Config.VERTEX_PROJECT_ID:
             return AnthropicVertex(project_id=Config.VERTEX_PROJECT_ID, region=Config.VERTEX_REGION)
         return Anthropic(api_key=Config.ANTHROPIC_API_KEY)
