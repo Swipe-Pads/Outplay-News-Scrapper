@@ -4,7 +4,12 @@ on:
   schedule:
     # 07:00 UTC Monday = 09:00 Europe/Warsaw in summer (CEST). In winter this fires 08:00 local.
     - cron: '0 7 * * 1'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Digest window in days (catch-up runs after missed weeks)'
+        required: false
+        default: '7'
 
 permissions:
   contents: write
@@ -61,7 +66,7 @@ jobs:
           DATABASE_PATH: data/articles.db
           LOG_LEVEL: INFO
         run: |
-          python -m src.pipeline --all --score --digest --since 7 --publish-digest
+          python -m src.pipeline --all --score --digest --since ${{ inputs.since || 7 }} --publish-digest
 
       - name: Persist DB (scraper-data branch)
         if: always()
